@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "BCI2000RemoteNET": {
+      "commandName": "Project"
+    }
+  }
+}

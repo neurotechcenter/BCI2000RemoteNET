@@ -20,10 +20,36 @@ namespace BCI2000RemoteNET
         public string TelnetIp { get; set; }
         public Int32 TelnetPort { get; set; }
         public string OperatorPath { get; set; }
-        public string WindowTitle { get; set; }
-        public int WindowVisible { get; set; }
         public string Result { get; private set; }
         private bool TerminateOperator { get; set; }
+
+
+        private string windowTitle;
+        public string WindowTitle {
+            get {
+                return windowTitle;
+            }
+
+            set {
+                windowTitle = value;
+                if (Connected())
+                    Execute("set title \"" + value + "\"");
+            } 
+        }
+        private int windowVisible;
+        public int WindowVisible {
+            get {
+                return windowVisible;
+            }
+            set {
+                windowVisible = value;
+                if (value == 0)
+                    Execute("hide window");
+                if (value == 1)
+                    Execute("show window");
+            }
+        }
+
 
         public BCI2000Connection()
         {
@@ -51,11 +77,11 @@ namespace BCI2000RemoteNET
             return true;
         }
 
-        public bool Connect() //Connects to operator module, starts operator if not running
+        public virtual bool Connect() //Connects to operator module, starts operator if not running
         {
             Disconnect();
 
-            if (TelnetIp == "" || TelnetIp == null)
+            if (String.IsNullOrEmpty(TelnetIp))
                 TelnetIp = defaultTelnetIp;
             if (TelnetPort == 0)
                 TelnetPort = defaultTelnetPort;
@@ -72,7 +98,7 @@ namespace BCI2000RemoteNET
                 success = false;
             }
 
-            if (!success && (OperatorPath == "" || OperatorPath == null))
+            if (!success && (String.IsNullOrEmpty(OperatorPath)))
                 Result = "Failed to connect to " + TelnetIp + ":" + TelnetPort;
 
 
@@ -116,8 +142,9 @@ namespace BCI2000RemoteNET
                 Result = "Not Connected at address " + TelnetIp + ":" + TelnetPort;
                 return false;
             }
-            SetWindowTitle(WindowTitle);
-            SetWindowVisible(WindowVisible);
+
+            WindowTitle = windowTitle;
+            WindowVisible = windowVisible;
 
             return true;
         }
@@ -150,27 +177,6 @@ namespace BCI2000RemoteNET
         {
             return tcp.Connected;
         }
-
-        public bool SetWindowTitle(string title)
-        {
-            WindowTitle = title;
-            if (Connected())
-            {
-                Execute("set title \"" + title + "\"");
-                return true;
-            }
-            return false;
-        }
-        public bool SetWindowVisible(int visible)
-        {
-            WindowVisible = visible;
-            if (visible == 0)
-                Execute("hide window");
-            if (visible == 1)
-                Execute("show window");
-            return true;
-        }
-
 
         public bool Quit()
         {
