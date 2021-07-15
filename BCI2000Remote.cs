@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace BCI2000RemoteNET
 {
@@ -67,6 +69,21 @@ namespace BCI2000RemoteNET
                     DataDirectory = dataDirectory;
             }
             return success;
+        }
+
+
+        public bool StartupModules(List<string> modules)
+        {
+            Execute("shutdown system");
+            Execute("startup system localhost");
+            int outCode = 0;
+            for (int i = 0; i < modules.Count; i++)
+            {
+                Execute("start executable " + modules[i] + " --local", ref outCode);
+            }
+
+
+            return true;
         }
 
 

@@ -7,13 +7,21 @@ namespace BCI2000RemoteNET
 {
     public class BCI2000Connection
     {
-        private static int defaultTimeout = 1000;
-        private static string defaultTelnetIp = "127.0.0.1";
-        private static Int32 defaultTelnetPort = 3999;
-        private static int defaultWindowVisible = 1;
-        private static string defaultWindowTitle = "";
+        private const int defaultTimeout = 1000;
+        private const string defaultTelnetIp = "127.0.0.1";
+        private const Int32 defaultTelnetPort = 3999;
+        private const int defaultWindowVisible = 1;
+        private const string defaultWindowTitle = "";
 
         private TcpClient tcp;
+
+        //response stuff
+        private const string ReadlineTag = "\\AwaitingInput:";
+        private const string AckTag = "\\AcknowledgedInput";
+        private const string ExitCodeTag = "\\ExitCode";
+        private const string TerminationTag = "\\Terminating";
+        private const string Prompt = ">";
+
 
 
         public int Timeout { get; set; } //send and recieve timeout in ms
@@ -95,6 +103,7 @@ namespace BCI2000RemoteNET
             }
             catch (SocketException ex)
             {
+                Result = "Failed to connect to " + TelnetIp + ":" + TelnetPort + ", " + ex.Message;
                 success = false;
             }
 
@@ -130,26 +139,24 @@ namespace BCI2000RemoteNET
                 }
                 catch (SocketException ex)
                 {
-                    Result = "Failed to connect to operator at 127.0.0.1:" + TelnetPort;
+                    Result = "Failed to connect to operator at 127.0.0.1:" + TelnetPort + ", " + ex.Message;
+                    return false;
                 }
             }
 
             tcp.SendTimeout = Timeout;
-            if (tcp.Connected == true)
-                Result = "Connected at address " + TelnetIp + ":" + TelnetPort;
-            if (tcp.Connected != true)
-            {
-                Result = "Not Connected at address " + TelnetIp + ":" + TelnetPort;
-                return false;
-            }
 
             WindowTitle = windowTitle;
             WindowVisible = windowVisible;
 
             return true;
         }
-
         public bool Execute(string command)
+        {
+            int unused = 0;
+            return Execute(command, ref unused);
+        }
+        public bool Execute(string command, ref int outCode)
         {
             Result = "";
             if (!tcp.Connected)
@@ -158,17 +165,73 @@ namespace BCI2000RemoteNET
                 return false;
             }
 
+            string response;
+
             try
             {
                 tcp.Client.Send(stringToBytes(command + "\r\n"));
                 Byte[] responseData = new Byte[1024];
                 tcp.Client.Receive(responseData);
-                string response = bytesToString(responseData);
+                response = bytesToString(responseData);
             }
             catch (SocketException ex)
             {
                 Result = "SocketException: " + ex + ", socket error code " + ex.SocketErrorCode;
                 return false;
+            }
+            return ProcessResponse(response, ref outCode);
+        }
+
+        public bool ProcessResponse(string response, ref int outCode)
+        {
+            if (response.Contains(ReadlineTag))
+            {
+                string input = "";
+                if (OnInput())
+                {
+                    tcp.Client.Send(stringToBytes(input + "\r\n"));
+                    Byte[] recvBuf = new byte[1024];
+                    tcp.Client.Receive(recvBuf);
+                    if (!bytesToString(recvBuf).Contains(AckTag))
+                    {
+                        Result = "Did not receive input acknowledgement";
+                        return false;
+                    }
+                }
+                else
+                {
+                    Result = "Could not handle request for input: Override BCI2000Connection.OnInput to handle input";
+                    return false;
+                }
+            }
+            else if (response.Contains(ExitCodeTag))
+            {
+                outCode = response.Length;
+            }
+            else if (response.Contains(TerminationTag))
+            {
+                tcp.Client.Close();
+                tcp.Close();
+                TerminateOperator = false;
+                return true;
+            }
+            else {
+                if (!OnOutput(response))
+                {
+                    StringBuilder ResultNew = new StringBuilder(Result);
+                    if (!String.IsNullOrEmpty(Result))
+                        ResultNew.Append('\n');
+                    ResultNew.Append(response);
+                    Result = ResultNew.ToString();
+                }
+                if (response.Equals("true", StringComparison.OrdinalIgnoreCase))
+                    outCode = 0;
+                else if (response.Equals("false", StringComparison.OrdinalIgnoreCase))
+                    outCode = 1;
+                else if (String.IsNullOrWhiteSpace(response))
+                    outCode = 0;
+                else
+                    outCode = -1;
             }
             return true;
         }
@@ -183,6 +246,17 @@ namespace BCI2000RemoteNET
             Execute("quit");
             return true;
         }
+
+        public virtual bool OnInput()//input and output handler methods to be overridden
+        {
+            return false;
+        }
+        public virtual bool OnOutput(string output)
+        {
+            return false;
+        }
+
+
 
         private Byte[] stringToBytes(string str)
         {
