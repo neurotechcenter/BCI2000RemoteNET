@@ -23,15 +23,16 @@ namespace BCI2000RemoteNET
         private const string Prompt = ">";
 
 
-
+        //changes to these will only take effect on Connect()
         public int Timeout { get; set; } //send and recieve timeout in ms
-        public string TelnetIp { get; set; }
+        public string TelnetIp { get; set; } 
         public Int32 TelnetPort { get; set; }
         public string OperatorPath { get; set; }
-        public string Result { get; private set; }
+        
+        public string Result { get; protected set; } //todo: Implement logging by writing result to a file (stupid solution, but anything else would be a pain at the moment
         private bool TerminateOperator { get; set; }
 
-
+        //Changes to these will result in a call to the Operator if connected
         private string windowTitle;
         public string WindowTitle {
             get {
@@ -108,8 +109,10 @@ namespace BCI2000RemoteNET
             }
 
             if (!success && (String.IsNullOrEmpty(OperatorPath)))
+            {
                 Result = "Failed to connect to " + TelnetIp + ":" + TelnetPort;
-
+                return false;
+            }
 
             if (!success) //tcp has not connected to running operator, so it will try to open a new operator and connect
             {
@@ -224,12 +227,12 @@ namespace BCI2000RemoteNET
                     ResultNew.Append(response);
                     Result = ResultNew.ToString();
                 }
-                if (response.Equals("true", StringComparison.OrdinalIgnoreCase))
-                    outCode = 0;
-                else if (response.Equals("false", StringComparison.OrdinalIgnoreCase))
+                if (response.IndexOf("true", StringComparison.OrdinalIgnoreCase) >= 0)//this is rewritten from the original code, but changed so that 1 reflects true and 0 reflects false
                     outCode = 1;
-                else if (String.IsNullOrWhiteSpace(response))
+                else if (response.IndexOf("false", StringComparison.OrdinalIgnoreCase) >= 0)
                     outCode = 0;
+                else if (String.IsNullOrWhiteSpace(response))
+                    outCode = 1;
                 else
                     outCode = -1;
             }
