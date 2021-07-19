@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Net.Sockets;
 
@@ -12,6 +12,7 @@ namespace BCI2000RemoteNET
         private const Int32 defaultTelnetPort = 3999;
         private const int defaultWindowVisible = 1;
         private const string defaultWindowTitle = "";
+        private const string defaultLogFile = "remoteLog.txt";
 
         private TcpClient tcp;
 
@@ -22,40 +23,127 @@ namespace BCI2000RemoteNET
         private const string TerminationTag = "\\Terminating";
         private const string Prompt = ">";
 
+        private string logFile;
+        public string LogFile
+        {
+            get
+            {
+                return logFile;
+            }
+            set
+            {
+                logFile = value;
+                if (Log == null)
+                    return;
+                if (Log != null)
+                    Log.Close();
+            }
+        }
+        protected StreamWriter Log { get; set; }
+
 
         //changes to these will only take effect on Connect()
         public int Timeout { get; set; } //send and recieve timeout in ms
-        public string TelnetIp { get; set; } 
+        public string TelnetIp { get; set; }
         public Int32 TelnetPort { get; set; }
         public string OperatorPath { get; set; }
-        
-        public string Result { get; protected set; } //todo: Implement logging by writing result to a file (stupid solution, but anything else would be a pain at the moment
+
+        private string result; //three properties for results and logging
+        public string Result
+        {
+            get
+            {
+                return result;
+            }
+
+            protected set
+            {
+                result = value;
+                if (Log == null)
+                    Log = new StreamWriter(LogFile);
+                if (Log != null && !String.IsNullOrWhiteSpace(Result))
+                {
+                    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + " Result: " + value);
+                    Log.Flush();
+                }
+            }
+        }
+        private string sending;
+        public string Sending
+        {
+            get
+            {
+                return sending;
+            }
+            set
+            {
+                sending = value;
+                if (Log == null)
+                    Log = new StreamWriter(LogFile);
+                if (Log != null)
+                {
+                    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + " Sent: " + value);
+                    Log.Flush();
+                }
+            }
+        }
+        private string received;
+        public string Received
+        {
+            get
+            {
+                return received;
+            }
+            private set
+            {
+                received = value;
+                if (Log == null)
+                    Log = new StreamWriter(LogFile);
+                if (Log != null)
+                {
+                    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + " Received: " + value.Replace("\0", string.Empty));
+                    Log.Flush();
+                }
+            }
+        }
+        public string Response { get; protected set; }
+
+        //result is set by methods in this class, response is the response from BCI2000, as Execute() shouldn't overwrite Result
         private bool TerminateOperator { get; set; }
 
         //Changes to these will result in a call to the Operator if connected
         private string windowTitle;
-        public string WindowTitle {
-            get {
+        public string WindowTitle
+        {
+            get
+            {
                 return windowTitle;
             }
 
-            set {
+            set
+            {
                 windowTitle = value;
                 if (Connected())
                     Execute("set title \"" + value + "\"");
-            } 
+            }
         }
         private int windowVisible;
-        public int WindowVisible {
-            get {
+        public int WindowVisible
+        {
+            get
+            {
                 return windowVisible;
             }
-            set {
+            set
+            {
                 windowVisible = value;
-                if (value == 0)
-                    Execute("hide window");
-                if (value == 1)
-                    Execute("show window");
+                if (Connected())
+                {
+                    if (value == 0)
+                        Execute("hide window");
+                    if (value == 1)
+                        Execute("show window");
+                }
             }
         }
 
@@ -67,22 +155,22 @@ namespace BCI2000RemoteNET
             TelnetPort = defaultTelnetPort;
             WindowVisible = defaultWindowVisible;
             WindowTitle = defaultWindowTitle;
+            LogFile = defaultLogFile;
         }
+
 
         //Ends connection to operator, terminates operator if it was started by a previous Connect() call
         public bool Disconnect()
         {
             Result = "";
-            if (tcp != null)
-                tcp.Close();
-
             if (TerminateOperator)
             {
                 TerminateOperator = false;
                 if (Connected())
                     Quit();
             }
-
+            if (tcp != null)
+                tcp.Close();
             return true;
         }
 
@@ -145,12 +233,17 @@ namespace BCI2000RemoteNET
                     Result = "Failed to connect to operator at 127.0.0.1:" + TelnetPort + ", " + ex.Message;
                     return false;
                 }
+
+                TerminateOperator = true;
             }
 
             tcp.SendTimeout = Timeout;
+            tcp.ReceiveTimeout = Timeout;
 
             WindowTitle = windowTitle;
             WindowVisible = windowVisible;
+
+            Execute("change directory $BCI2000LAUNCHDIR");
 
             return true;
         }
@@ -162,92 +255,112 @@ namespace BCI2000RemoteNET
         public bool Execute(string command, ref int outCode)
         {
             Result = "";
-            if (!tcp.Connected)
+            if (!Connected())
             {
                 Result = "Not connected, call BCI2000Connection.Connect() to connect.";
                 return false;
             }
 
-            string response;
-
+            string responseUnprocessed;
+            Sending = command;
             try
             {
                 tcp.Client.Send(stringToBytes(command + "\r\n"));
                 Byte[] responseData = new Byte[1024];
                 tcp.Client.Receive(responseData);
-                response = bytesToString(responseData);
+                responseUnprocessed = bytesToString(responseData);
             }
             catch (SocketException ex)
             {
                 Result = "SocketException: " + ex + ", socket error code " + ex.SocketErrorCode;
                 return false;
             }
-            return ProcessResponse(response, ref outCode);
+            Received = responseUnprocessed;
+            return ProcessResponse(responseUnprocessed, ref outCode);
         }
 
-        public bool ProcessResponse(string response, ref int outCode)
+        public bool ProcessResponse(string responseUnprocessed, ref int outCode)
         {
-            if (response.Contains(ReadlineTag))
+            Response = "";
+            byte[] buffer = new byte[1024];
+            while (Connected() && (!(responseUnprocessed.IndexOf(Prompt, StringComparison.OrdinalIgnoreCase) >= 0)) || tcp.Client.Available > 0)
             {
-                string input = "";
-                if (OnInput())
+                if (responseUnprocessed.Contains(ReadlineTag))
                 {
-                    tcp.Client.Send(stringToBytes(input + "\r\n"));
-                    Byte[] recvBuf = new byte[1024];
-                    tcp.Client.Receive(recvBuf);
-                    if (!bytesToString(recvBuf).Contains(AckTag))
+                    string input = "";
+                    if (OnInput())
                     {
-                        Result = "Did not receive input acknowledgement";
+                        tcp.Client.Send(stringToBytes(input + "\r\n"));
+                        Byte[] recvBuf = new byte[1024];
+                        tcp.Client.Receive(recvBuf);
+                        if (!bytesToString(recvBuf).Contains(AckTag))
+                        {
+                            Result = "Did not receive input acknowledgement";
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        Result = "Could not handle request for input: Override BCI2000Connection.OnInput to handle input";
                         return false;
                     }
                 }
+                else if (responseUnprocessed.Contains(ExitCodeTag))
+                {
+                    outCode = responseUnprocessed.Length;
+                }
+                else if (responseUnprocessed.Contains(TerminationTag))
+                {
+                    tcp.Client.Close();
+                    tcp.Close();
+                    TerminateOperator = false;
+                    return true;
+                }
                 else
                 {
-                    Result = "Could not handle request for input: Override BCI2000Connection.OnInput to handle input";
-                    return false;
+                    if (!OnOutput(responseUnprocessed))
+                    {
+                        Response = responseUnprocessed;
+                    }
+                    if (responseUnprocessed.IndexOf("true", StringComparison.OrdinalIgnoreCase) >= 0)//this is rewritten from the original code, but changed so that 1 reflects true and 0 reflects false
+                        outCode = 1;
+                    else if (responseUnprocessed.IndexOf("false", StringComparison.OrdinalIgnoreCase) >= 0)
+                        outCode = 0;
+                    else if (String.IsNullOrWhiteSpace(responseUnprocessed))
+                        outCode = 1;
+                    else
+                        outCode = -1;
                 }
+                Array.Clear(buffer, 0, 1024);
+                tcp.Client.Receive(buffer);
+                responseUnprocessed = responseUnprocessed + bytesToString(buffer);
             }
-            else if (response.Contains(ExitCodeTag))
+            if (!Connected())
             {
-                outCode = response.Length;
+                Result = "Lost Connection to BCI2000";
+                return false;
             }
-            else if (response.Contains(TerminationTag))
+            if (responseUnprocessed.IndexOf(Prompt, StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                tcp.Client.Close();
-                tcp.Close();
-                TerminateOperator = false;
+                Response = responseUnprocessed;
+                outCode = 1;
                 return true;
-            }
-            else {
-                if (!OnOutput(response))
-                {
-                    StringBuilder ResultNew = new StringBuilder(Result);
-                    if (!String.IsNullOrEmpty(Result))
-                        ResultNew.Append('\n');
-                    ResultNew.Append(response);
-                    Result = ResultNew.ToString();
-                }
-                if (response.IndexOf("true", StringComparison.OrdinalIgnoreCase) >= 0)//this is rewritten from the original code, but changed so that 1 reflects true and 0 reflects false
-                    outCode = 1;
-                else if (response.IndexOf("false", StringComparison.OrdinalIgnoreCase) >= 0)
-                    outCode = 0;
-                else if (String.IsNullOrWhiteSpace(response))
-                    outCode = 1;
-                else
-                    outCode = -1;
             }
             return true;
         }
 
         public bool Connected()
         {
-            return tcp.Connected;
+            if (tcp != null)
+                return tcp.Connected;
+            else
+                return false;
         }
 
         public bool Quit()
         {
             Execute("quit");
-            return true;
+            return String.IsNullOrWhiteSpace(Response);
         }
 
         public virtual bool OnInput()//input and output handler methods to be overridden
@@ -261,13 +374,13 @@ namespace BCI2000RemoteNET
 
 
 
-        private Byte[] stringToBytes(string str)
+        private Byte[] stringToBytes(string str)//utility methods
         {
             return System.Text.Encoding.ASCII.GetBytes(str);
         }
         private string bytesToString(Byte[] bytes)
         {
-            return System.Text.Encoding.ASCII.GetString(bytes);
+            return System.Text.Encoding.ASCII.GetString(bytes).Replace("\0", String.Empty);
         }
 
 

@@ -53,16 +53,33 @@ namespace BCI2000RemoteNET
             }
         }
 
+        private const bool defaultStopOnQuit = true;
+        private const bool defaultDisconnectOnQuit = true;
+
+        public bool StopOnQuit { get; set; }
+        public bool DisconnectOnQuit { get; set; }
+
 
         public BCI2000Remote()
         {
+            StopOnQuit = defaultStopOnQuit;
+            DisconnectOnQuit = defaultDisconnectOnQuit;
 
+        }
+
+        ~BCI2000Remote()
+        {
+            if (StopOnQuit)
+                Stop();
+            if (DisconnectOnQuit)
+                Disconnect();
         }
 
         public override bool Connect()
         {
             bool success = base.Connect();
-            if (success) {
+            if (success)
+            {
                 if (!String.IsNullOrEmpty(SubjectID))
                     SubjectID = subjectID;
                 if (!String.IsNullOrEmpty(SessionID))
@@ -73,24 +90,46 @@ namespace BCI2000RemoteNET
             return success;
         }
 
-
-        public bool StartupModules(List<string> modules)
+        /**
+         * 
+         * takes module and arguments in the form of a dictionary with the keys being module names and value being a list of arguments
+         * uses lists and dictionary because parsing strings is annoying
+         * pass null as a value for no arguments other than --local
+         * arguments don't need "--" in front, and whitespace is removed
+         * 
+         * 
+         * **/
+        public bool StartupModules(Dictionary<string, List<string>> modules)
         {
             Execute("shutdown system");
             Execute("startup system localhost");
             StringBuilder errors = new StringBuilder();
             int outCode = 0;
-            for (int i = 0; i < modules.Count; i++)
+            foreach (KeyValuePair<string, List<string>> module in modules)
             {
-                Execute("start executable " + modules[i] + " --local", ref outCode);
+                StringBuilder moduleAndArgs = new StringBuilder(module.Key + ' ');
+                bool containsLocal = false;
+                if (module.Value != null && module.Value.Count > 0)
+                {
+                    foreach (string argument in module.Value)
+                    {
+                        string argumentNoWS = new string(argument.Where(c => !Char.IsWhiteSpace(c)).ToArray());
+                        if (!argumentNoWS.StartsWith("--"))//add dashes to beginning
+                            argumentNoWS = "--" + argumentNoWS;
+                        if (argumentNoWS.IndexOf("--local", StringComparison.OrdinalIgnoreCase) >= 0)
+                            containsLocal = true;
+                        moduleAndArgs.Append(argumentNoWS + ' ');
+                    }
+                }
+                if (!containsLocal)//according to original, all modules start with option --local; appends --local to command
+                    moduleAndArgs.Append("--local ");
+
+                Execute("start executable " + moduleAndArgs.ToString(), ref outCode);
                 if (outCode != 1)
                 {
-                    errors.Append('\n' + modules[i] + " returned code " + outCode);
+                    errors.Append('\n' + module.Key + " returned " + outCode);
                 }
-                else if (!String.IsNullOrEmpty(Result))
-                {
-                    errors.Append('\n' + Result);
-                }
+                Result = errors.ToString();
             }
             if (!String.IsNullOrWhiteSpace(errors.ToString())) //errors while starting up modules
             {
@@ -98,9 +137,9 @@ namespace BCI2000RemoteNET
                 return false;
             }
             WaitForSystemState("Connected");
-            
+
             return true;
-        } 
+        }
 
         public bool SetConfig()
         {
@@ -112,13 +151,14 @@ namespace BCI2000RemoteNET
             if (SimpleCommand("set config"))
                 WaitForSystemState("Resting|Initialization");
             else
-                tempResult = Result;
+                tempResult = Response;
             Execute("capture messages none");
             Execute("get system state");
-            bool success = !ResultContains("Resting");
+            //bool success = !ResponseContains("Resting");
             Execute("flush messages");
-            if (!String.IsNullOrWhiteSpace(tempResult))//set config caused errors
-                Result = tempResult + '\n' + Result;
+            if (!String.IsNullOrWhiteSpace(tempResult) && !tempResult.Equals(">"))//set config caused errors
+                Result = tempResult + '\n' + Response;
+            bool success = true;
             return success;
         }
 
@@ -126,12 +166,12 @@ namespace BCI2000RemoteNET
         {
             bool success = true;
             Execute("get system state");
-            if (ResultContains("Running"))
+            if (ResponseContains("Running"))
             {
                 Result = "System is already running";
                 success = false;
             }
-            else if (ResultContains("Resting") || ResultContains("Suspended"))
+            else if (!ResponseContains("Resting") && !ResponseContains("Suspended"))
                 success = SetConfig();
             if (success)
                 success = SimpleCommand("start system");
@@ -141,7 +181,7 @@ namespace BCI2000RemoteNET
         public bool Stop()
         {
             Execute("get system state");
-            if (!ResultContains("Running"))
+            if (!ResponseContains("Running"))
             {
                 Result = "System is not running";
                 return false;
@@ -161,7 +201,7 @@ namespace BCI2000RemoteNET
             if (outCode == 1)//name is a valid parameter
             {
                 Execute("get parameter \"" + name + "\"");
-                outValue = Result;
+                outValue = Response;
                 return true;
             }
             else
@@ -174,7 +214,8 @@ namespace BCI2000RemoteNET
         public bool LoadParametersLocal(string filename) //loads parameters from local (does not matter if running BCI2K locally, just use remote)
         {//Also it probably doesnt work at the moment
             StreamReader file;
-            try {
+            try
+            {
                 file = File.OpenText(filename);
             }
             catch (Exception ex)
@@ -183,15 +224,25 @@ namespace BCI2000RemoteNET
                 return false;
             }
             string line;
+
             int errors = 0;
+            while ((line = file.ReadLine()) != null)
+            {
+                errors += Convert.ToInt32(!SimpleCommand("add parameter " + EscapeSpecialChars(line)));//adds number of parameter adds which fail, inverted because a failure will return a false or 0
+            }
+            if (Convert.ToBoolean(errors))
+            {
+                Result = "Could not add " + errors + " parameter(s)";
+            }
+
+            errors = 0;
             while ((line = file.ReadLine()) != null)
             {
                 errors += Convert.ToInt32(!SimpleCommand("set parameter " + EscapeSpecialChars(line)));//adds number of parameter adds which fail, inverted because a failure will return a false or 0
             }
             if (Convert.ToBoolean(errors))
             {
-                Result = "Could not add " + errors + " parameter(s)";
-                return false;
+                Result = "Could not set " + errors + " parameter(s)";
             }
             return true;
         }
@@ -216,7 +267,7 @@ namespace BCI2000RemoteNET
             {
                 try
                 {
-                    outValue = Double.Parse(Result);
+                    outValue = Double.Parse(Response);
                     return true;
                 }
                 catch (Exception)
@@ -229,15 +280,20 @@ namespace BCI2000RemoteNET
 
         public bool WaitForSystemState(string state)
         {
+            return SimpleCommand("wait for " + state);
+        }
 
-            int timeout = Timeout - 1;
-            return SimpleCommand("wait for " + state + " " + timeout.ToString());
+        public bool GetSystemState(ref string outState)
+        {
+            bool success = SimpleCommand("get system state");
+            outState = Response;
+            return success;
         }
 
         public bool SimpleCommand(string command)
         {
             Execute(command);
-            return string.IsNullOrWhiteSpace(Result) || Atoi(Result) != 0; //returns true if Result is empty or nonzero
+            return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Equals(">"); //returns true if Result is empty or nonzero
         }
 
         private string EscapeSpecialChars(string str)
@@ -250,8 +306,8 @@ namespace BCI2000RemoteNET
                 Byte charBit = Convert.ToByte(chars[c]);
                 if (escapeChars.Contains(chars[c]) || charBit < 32 || charBit > 128)
                 {
-                    Byte CharBitChanged = (Byte)((charBit >> 4) | (charBit & 0xf));
-                    stringFinal.Append('%' + BitConverter.ToString(new byte[] { CharBitChanged })); 
+                    //Byte CharBitChanged = (Byte)((charBit >> 4) | (charBit & 0xf));
+                    stringFinal.Append('%' + BitConverter.ToString(new byte[] { charBit }));
                 }
                 else
                     stringFinal.Append(chars[c]);
@@ -263,25 +319,27 @@ namespace BCI2000RemoteNET
 
         private int Atoi(string str)//implementation of c atoi() since original code uses it
         {
-            int result;
+            int output;
             try
             {
-                result = int.Parse(str);
+                output = int.Parse(str);
             }
             catch (FormatException)
             {
-                result = 0;
+                output = 0;
             }
-            return result;
+            return output;
         }
 
         private bool Stricmp(string str1, string str2) // implementation of c stricmp
         {
+            if (str1 == null || str2 == null)
+                return false;
             return str1.IndexOf(str2, StringComparison.OrdinalIgnoreCase) >= 0;
         }
-        private bool ResultContains(string str1)//using stricmp on result is annoying
+        private bool ResponseContains(string str1)//using stricmp on result is annoying
         {
-            return Stricmp(Result, str1);
+            return Stricmp(Response, str1);
         }
     }
 }
