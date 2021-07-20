@@ -43,9 +43,11 @@ namespace BCI2000RemoteNET
             }
         }
         protected StreamWriter Log { get; set; }
+        
+        
+        private bool LastLogState { get; set; } //was the last thing sent a command to set state
 
         public bool LogStates { get; set; } //sets whether to log commands to set state, along with the received prompts afterwards
-        private bool LastLogState { get; set; } //was the last thing sent a command to set state
         public bool LogPrompts { get; set; } //sets whether to log all received prompts
 
 
