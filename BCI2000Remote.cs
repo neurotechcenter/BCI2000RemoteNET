@@ -1,4 +1,22 @@
-﻿using System;
+﻿///////////////////////////////////////////////////////////////////////
+// Author: tytbutler@yahoo.com
+// Description: A class for controlling BCI2000 remotely from a .NET
+//      application. Does not depend on BCI2000 framework.
+//      On Error, a function returns false, and errors raised by 
+//      the class are stored in Result, and errors raised by the
+//      Operator are stored in Received.
+//
+//      Adapted from the C++ BCI2000Remote
+//
+//      This file is part of BCI2000, and is subject to the same GNU
+//      General Public License as the rest of BCI2000
+//
+// (C) 2000-2021, BCI2000 Project
+// http://www.bci2000.org
+///////////////////////////////////////////////////////////////////////
+
+
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text;
