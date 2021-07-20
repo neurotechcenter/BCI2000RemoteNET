@@ -56,7 +56,8 @@ Logging and Debugging Properties
 All of these properties are written to the `LogFile` whenever they are changed, except for the cases set by `LogStates` and `LogPrompts`.
 
 `Result`
-The result of a method, usually represents any error in execution of a method. Always set either by the instance of BCI2000Remote it is a member of, and reset whenever `Execute()` is called.
+The result of a method, usually represents any error in execution of a method.
+Always set either by the instance of BCI2000Remote it is a member of, and reset whenever `Execute()` is called.
 
 `Sending`
 The command being sent to the operator.
@@ -83,7 +84,10 @@ Returns whether `BCI2000Remote` is connected to the operator.
 
 `StartupModules(Dictionary<string module, List<string> arguments>)`
 Starts up modules in the Operator's directory.
-Takes a dictionary of type <string, List<string>>, with the keys being the module name, and the values being whatever command line arguments are being passed to the module. Automatically appends "--" to the beginning of arguments and "--local" to the list of arguments.
+Takes a dictionary of type <string, List<string>>, with the keys being the module name,
+and the values being whatever command line arguments are being passed to the module.
+Automatically appends "--" to the beginning of arguments and "--local" to the list of arguments.
+Pass null to arguments to only run modules with --local
 
 `LoadParametersRemote(string path)`
 Loads parameters from a file on the Operator's machine.
@@ -117,4 +121,9 @@ Gets a state variable's value and stores it at the given reference.
 Gets the system's state, and stores it at the given reference.
 
 `Execute(string command, optional ref int outCode)`
-Executes a given command. The outCode is used when a command returns a value that is easily interpretable as true or false, in which case it will be 1 for true and 0 for false, or -1 for anything not interpretable. If the command returns a number for an exit code, the outCode will be 0. This is reversed from the original BCI2000Remote due to BCI2000RemoteNET using 1 to represent true and success, and to avoid confusion about 0 being true. If a command needs to return something other than an exit code, don't use outCode, as the response will be stored at `Received` or `Response`. In most cases the override `Execute(string command)` will be used.
+Executes a given command. The outCode is used when a command returns a value that is easily interpretable as true or false,
+in which case it will be 1 for true and 0 for false,
+or -1 for anything not interpretable. If the command returns a number for an exit code, the outCode will be 0.
+This is reversed from the original BCI2000Remote due to BCI2000RemoteNET using 1 to represent true and success,
+and to avoid confusion about 0 being true. If a command needs to return something other than an exit code, don't use outCode,
+as the response will be stored at `Received` or `Response`. In most cases the override `Execute(string command)` will be used.
