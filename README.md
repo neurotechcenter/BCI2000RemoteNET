@@ -3,10 +3,10 @@ BCI2000RemoteNET
 Implementation of BCI2000Remote as .NET Standard
 ---
 
-Github
-[Link](https://github.com/Personator01/BCI2000RemoteNET)
-BCI2000
-[Link](https://www.BCI2000.org)
+
+[GitHub](https://github.com/Personator01/BCI2000RemoteNET)
+
+[BCI2000](https://www.BCI2000.org)
 
 Description
 ---
@@ -15,7 +15,7 @@ essentially an automated command line.
 
 Commmunication
 ---
-BCI2000Remote communicates with BCI2000 over tcp, by sending Operator Scripting Commands ([Link](https://www.bci2000.org/mediawiki/index.php/User_Reference:Operator_Module_Scripting)), and receiving and processing responses.
+BCI2000Remote communicates with BCI2000 over tcp, by sending [Operator Scripting Commands](https://www.bci2000.org/mediawiki/index.php/User_Reference:Operator_Module_Scripting), and receiving and processing responses.
 After sending a command, BCI2000Remote will usually receive either a '>' (Prompt), if the command produces no output and no errors,
 the output of the command, or any error that the command produces.
 
