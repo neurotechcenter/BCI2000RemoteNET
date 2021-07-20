@@ -5,8 +5,6 @@
 //
 //      Adapted from the C++ BCI2000Connection
 //
-//      This file is part of BCI2000, and is subject to the same GNU
-//      General Public License as the rest of BCI2000
 //
 // (C) 2000-2021, BCI2000 Project
 // http://www.bci2000.org
