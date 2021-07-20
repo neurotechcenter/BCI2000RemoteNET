@@ -192,8 +192,7 @@ namespace BCI2000RemoteNET
 
         public virtual bool Connect() //Connects to operator module, starts operator if not running
         {
-            Disconnect();
-
+            
             if (String.IsNullOrEmpty(TelnetIp))
                 TelnetIp = defaultTelnetIp;
             if (TelnetPort == 0)
