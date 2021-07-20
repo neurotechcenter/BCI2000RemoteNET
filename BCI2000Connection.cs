@@ -186,7 +186,11 @@ namespace BCI2000RemoteNET
                     Quit();
             }
             if (tcp != null)
+            {
+                tcp.Client.Close();
+                tcp.GetStream().Close();
                 tcp.Close();
+            }
             return true;
         }
 
