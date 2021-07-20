@@ -13,6 +13,9 @@ namespace BCI2000RemoteNET
         private const int defaultWindowVisible = 1;
         private const string defaultWindowTitle = "";
         private const string defaultLogFile = "remoteLog.txt";
+        private const bool defaultLogStates = false;
+        private const bool defaultLogPrompts = false;
+
 
         private TcpClient tcp;
 
@@ -41,12 +44,19 @@ namespace BCI2000RemoteNET
         }
         protected StreamWriter Log { get; set; }
 
+        public bool LogStates { get; set; } //sets whether to log commands to set state, along with the received prompts afterwards
+        private bool LastLogState { get; set; } //was the last thing sent a command to set state
+        public bool LogPrompts { get; set; } //sets whether to log all received prompts
+
 
         //changes to these will only take effect on Connect()
         public int Timeout { get; set; } //send and recieve timeout in ms
         public string TelnetIp { get; set; }
         public Int32 TelnetPort { get; set; }
         public string OperatorPath { get; set; }
+
+
+
 
         private string result; //three properties for results and logging
         public string Result
@@ -59,13 +69,7 @@ namespace BCI2000RemoteNET
             protected set
             {
                 result = value;
-                if (Log == null)
-                    Log = new StreamWriter(LogFile);
-                if (Log != null && !String.IsNullOrWhiteSpace(Result))
-                {
-                    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + " Result: " + value);
-                    Log.Flush();
-                }
+                WriteLog("Result: ", value);
             }
         }
         private string sending;
@@ -78,13 +82,13 @@ namespace BCI2000RemoteNET
             set
             {
                 sending = value;
-                if (Log == null)
-                    Log = new StreamWriter(LogFile);
-                if (Log != null)
+                if (value.IndexOf("set state", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + " Sent: " + value);
-                    Log.Flush();
+                    LastLogState = true;
+                    if (!LogStates)// if logging states is disabled
+                        return;
                 }
+                WriteLog("Sent: ", value);
             }
         }
         private string received;
@@ -97,13 +101,21 @@ namespace BCI2000RemoteNET
             private set
             {
                 received = value;
-                if (Log == null)
-                    Log = new StreamWriter(LogFile);
-                if (Log != null)
+
+                if (value.IndexOf(Prompt) == 0)
                 {
-                    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + " Received: " + value.Replace("\0", string.Empty));
-                    Log.Flush();
+                    if (LastLogState)
+                    {
+                        LastLogState = false;
+                        if (!LogStates) //don't log prompts as received from 'set state'
+                        {
+                            return;
+                        }
+                    }
+                    if (!LogPrompts) //don't log prompts
+                        return;
                 }
+                WriteLog("Received: ", value);
             }
         }
         public string Response { get; protected set; }
@@ -156,6 +168,8 @@ namespace BCI2000RemoteNET
             WindowVisible = defaultWindowVisible;
             WindowTitle = defaultWindowTitle;
             LogFile = defaultLogFile;
+            LogStates = defaultLogStates;
+            LogPrompts = defaultLogPrompts;
         }
 
 
@@ -372,6 +386,21 @@ namespace BCI2000RemoteNET
             return false;
         }
 
+
+        public void WriteLog(string toLog)//for writing to log from outside the class
+        {
+            WriteLog("External: ", toLog);
+        }
+        private void WriteLog(string logPreface, string toLog)
+        {
+            if (Log == null)
+                Log = new StreamWriter(LogFile);
+            if (Log != null && !String.IsNullOrWhiteSpace(toLog))
+            {
+                Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + ' ' + logPreface + ' ' + toLog);
+                Log.Flush();
+            }
+        }
 
 
         private Byte[] stringToBytes(string str)//utility methods
