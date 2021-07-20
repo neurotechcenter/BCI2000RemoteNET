@@ -37,7 +37,7 @@ The port to connect to the Operator, default 3999.
 The path to the Operator module to start up when there is no running operator at the IP and port specified, will always connect on localhost, at the previously given port.
 
 `LogFile`
-The path to the file to write the log. This is overwritten on `Connect()`, default "logFile.txt", in the directory where BCI2000RemoteNet is run.
+The path to the file to write the log. This is overwritten on `Connect()`, default "logFile.txt", in the working directory of the calling application.
 
 `LogStates`
 Whether or not to log commands to set a state, as well as the received Prompt if the command produces no errors, default false.
