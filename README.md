@@ -8,6 +8,8 @@ Implementation of BCI2000Remote as .NET Standard
 
 [BCI2000](https://www.BCI2000.org)
 
+[NuGet](https://www.nuget.org/packages/BCI2000RemoteNET)
+
 Description
 ---
 Consists of a class, `BCI2000Remote`, which handles connection and communication with BCI2000's operator by sending commands over tcp,
