@@ -45,7 +45,7 @@ The path to the file to write the log. This is overwritten on `Connect()`, defau
 Whether or not to log commands to set a state, as well as the received Prompt if the command produces no errors, default false.
 
 `LogPrompts`
-Whether or not to log any Prompt, in which case only received output and errors will be logged, default true.
+Whether or not to log any Prompt, in which case only received output and errors will be logged, default false.
 
 `StopOnQuit`
 Whether or not to stop the Operator run when ending BCI2000Remote, default true.
