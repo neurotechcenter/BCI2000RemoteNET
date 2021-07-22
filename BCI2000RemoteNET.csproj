@@ -2,6 +2,32 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <Version>0.2.1</Version>
+    <Authors>Ty Butler</Authors>
+    <Company>BCI2000</Company>
+    <Product />
+    <Description>Interface for controlling BCI2000 remotely.</Description>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <RepositoryUrl>https://github.com/neurotechcenter/BCI2000RemoteNET</RepositoryUrl>
+    <PackageIcon>prompt256.png</PackageIcon>
+    <PackageIconUrl />
+    <RepositoryType>Git</RepositoryType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="LICENSE.md">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+    <None Include="prompt256.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+    <Content Include="README.md">
+      <Pack>true</Pack>
+      <PackagePath>\</PackagePath>
+    </Content>
+  </ItemGroup>
 
 </Project>
