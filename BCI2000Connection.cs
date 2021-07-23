@@ -187,6 +187,11 @@ namespace BCI2000RemoteNET
             LogPrompts = defaultLogPrompts;
         }
 
+        ~BCI2000Connection()
+        {
+            Log.Close();
+        }
+
 
         //Ends connection to operator, terminates operator if it was started by a previous Connect() call
         public bool Disconnect()
