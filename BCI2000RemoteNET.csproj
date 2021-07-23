@@ -1,9 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <Authors>Ty Butler</Authors>
     <Company>BCI2000</Company>
     <Product />
