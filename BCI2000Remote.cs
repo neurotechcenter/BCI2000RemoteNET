@@ -60,6 +60,8 @@ namespace BCI2000RemoteNET
         public bool DisconnectOnQuit { get; set; }
 
 
+        private char[] trimChars =  new char[] { '\r', '\n', ' ', '>' };
+
         public BCI2000Remote()
         {
             StopOnQuit = defaultStopOnQuit;
@@ -267,7 +269,11 @@ namespace BCI2000RemoteNET
             {
                 try
                 {
-                    outValue = Double.Parse(Response);
+                    string res = "";
+                    if (Response.Contains('>')) {
+                        res = Response.TrimEnd(trimChars);
+                        }
+                    outValue = Double.Parse(res);
                     return true;
                 }
                 catch (Exception)
