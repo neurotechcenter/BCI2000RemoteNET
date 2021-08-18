@@ -74,6 +74,8 @@ namespace BCI2000RemoteNET
         public bool DisconnectOnQuit { get; set; }
 
 
+        private char[] trimChars =  new char[] { '\r', '\n', ' ', '>' };
+
         public BCI2000Remote()
         {
             StopOnQuit = defaultStopOnQuit;
@@ -281,7 +283,10 @@ namespace BCI2000RemoteNET
             {
                 try
                 {
-                    outValue = Double.Parse(Response);
+                    string res = "";
+                    if (Response.Contains('>')) 
+                        res = Response.Trim(trimChars);
+                    outValue = Double.Parse(res);
                     return true;
                 }
                 catch (Exception)
@@ -307,7 +312,7 @@ namespace BCI2000RemoteNET
         public bool SimpleCommand(string command)
         {
             Execute(command);
-            return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Equals(">"); //returns true if Result is empty or nonzero
+            return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Contains(">"); //returns true if Result is empty or nonzero
         }
 
         private string EscapeSpecialChars(string str)
