@@ -270,9 +270,8 @@ namespace BCI2000RemoteNET
                 try
                 {
                     string res = "";
-                    if (Response.Contains('>')) {
-                        res = Response.TrimEnd(trimChars);
-                        }
+                    if (Response.Contains('>')) 
+                        res = Response.Trim(trimChars);
                     outValue = Double.Parse(res);
                     return true;
                 }
@@ -299,7 +298,7 @@ namespace BCI2000RemoteNET
         public bool SimpleCommand(string command)
         {
             Execute(command);
-            return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Equals(">"); //returns true if Result is empty or nonzero
+            return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Contains(">"); //returns true if Result is empty or nonzero
         }
 
         private string EscapeSpecialChars(string str)
