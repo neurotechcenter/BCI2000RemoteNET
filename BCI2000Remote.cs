@@ -91,9 +91,18 @@ namespace BCI2000RemoteNET
                 Disconnect();
         }
 
-        public override bool Connect(string[] commandsInProgDir)
+        public bool Connect(string[] commandsInProgDir)
         {
-            bool success = base.Connect(commandsInProgDir);
+            bool success = Connect();
+            foreach (string command in commandsInProgDir)
+            {
+                Execute(command);
+            }
+            return success;
+        }
+        public override bool Connect()
+        {
+            bool success = base.Connect();
             if (success)
             {
                 if (!String.IsNullOrEmpty(SubjectID))

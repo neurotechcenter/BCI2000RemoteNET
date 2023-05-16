@@ -208,7 +208,7 @@ namespace BCI2000RemoteNET
             return true;
         }
 
-        public virtual bool Connect(string[] commandsInProgDir) //Connects to operator module, starts operator if not running
+        public virtual bool Connect() //Connects to operator module, starts operator if not running
         {
             
             if (String.IsNullOrEmpty(TelnetIp))
@@ -275,12 +275,9 @@ namespace BCI2000RemoteNET
 
             WindowTitle = windowTitle;
             WindowVisible = windowVisible;
-            
+
             Execute("change directory $BCI2000LAUNCHDIR");
-            foreach (string command in commandsInProgDir)
-            {
-                Execute(command);
-            }
+
             return true;
         }
         public bool Execute(string command)
