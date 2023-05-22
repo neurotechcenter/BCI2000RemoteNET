@@ -90,11 +90,12 @@ namespace BCI2000RemoteNET
             if (DisconnectOnQuit)
                 Disconnect();
         }
-
-        public bool Connect(string[] commandsInProgDir)
+	
+	//Connects to operator and immediately runs BCI2000Shell commands given as an argument.
+        public bool Connect(string[] initCommands)
         {
             bool success = Connect();
-            foreach (string command in commandsInProgDir)
+            foreach (string command in initCommands)
             {
                 Execute(command);
             }
