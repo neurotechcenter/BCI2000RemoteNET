@@ -325,6 +325,16 @@ namespace BCI2000RemoteNET
             return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Contains(">"); //returns true if Result is empty or nonzero
         }
 
+
+        public int GetEvent(string eventName)
+        {
+            if (!(SimpleCommand("get event " + eventName))) {
+                throw new ArgumentException("Event " + eventName + " does not exist.");
+            }
+
+            return Atoi(Response);
+        }
+
         private string EscapeSpecialChars(string str)
         {
             string escapeChars = "#\"${}`&|<>;\n";
