@@ -74,7 +74,18 @@ namespace BCI2000RemoteNET
         public bool DisconnectOnQuit { get; set; }
 
 
-        private char[] trimChars =  new char[] { '\r', '\n', ' ', '>' };
+        private readonly char[] TRIM_CHARS =  new char[] { '\r', '\n', ' ', '>' };
+
+        private readonly string[] SYSTEM_STATES = new string[] {"unavailable",
+            "idle",
+            "startup",
+            "initialization",
+            "resting",
+            "suspended",
+            "paramsmodified",
+            "running",
+            "termination",
+            "busy"}; 
 
         public BCI2000Remote()
         {
@@ -97,7 +108,7 @@ namespace BCI2000RemoteNET
             bool success = Connect();
             foreach (string command in initCommands)
             {
-                Execute(command);
+                SimpleCommand(command);
             }
             return success;
         }
@@ -173,166 +184,136 @@ namespace BCI2000RemoteNET
             SessionID = sessionID;
             DataDirectory = dataDirectory;
             Execute("capture messages none warnings errors");
-            string tempResult = "";
-            if (SimpleCommand("set config"))
-                WaitForSystemState("Resting|Initialization");
-            else
-                tempResult = Response;
+            SimpleCommand("set config");
+            WaitForSystemState("Resting|Initialization");
             Execute("capture messages none");
             Execute("get system state");
             //bool success = !ResponseContains("Resting");
             Execute("flush messages");
-            if (!String.IsNullOrWhiteSpace(tempResult) && !tempResult.Equals(">"))//set config caused errors
-                Result = tempResult + '\n' + Response;
             bool success = true;
             return success;
         }
 
-        public bool Start()
+        public void Start()
         {
             bool success = true;
             Execute("get system state");
             if (ResponseContains("Running"))
             {
-                Result = "System is already running";
-                success = false;
+                Console.Write("System is already running");
             }
             else if (!ResponseContains("Resting") && !ResponseContains("Suspended"))
-                success = SetConfig();
-            if (success)
-                success = SimpleCommand("start system");
-            return success;
+                SetConfig();
+            SimpleCommand("start system");
         }
 
-        public bool Stop()
+        public void Stop()
         {
             Execute("get system state");
             if (!ResponseContains("Running"))
             {
-                Result = "System is not running";
-                return false;
+                Console.Write("System is not running");
             }
-            return SimpleCommand("stop system");
+            SimpleCommand("stop system");
         }
 
-        public bool SetParameter(string name, string value)
+        public void SetParameter(string name, string value)
         {
-            return SimpleCommand("set parameter \"" + name + "\" \"" + value + "\"");
+            SimpleCommand("set parameter \"" + name + "\" \"" + value + "\"");
         }
 
-        bool GetParameter(string name, ref string outValue)//uses a ref to avoid the problem of returning a value if the command fails
+        public string GetParameter(string name)
         {
             int outCode = 0;
             Execute("is parameter \"" + name + "\"", ref outCode);
             if (outCode == 1)//name is a valid parameter
             {
                 Execute("get parameter \"" + name + "\"");
-                outValue = Response;
-                return true;
+                return Response;
             }
             else
             {
-                Result = name + " is not a valid parameter name";
-                return false;
+                throw new BCI2000CommandException(name + " is not a valid parameter name");
             }
         }
 
-        public bool LoadParametersLocal(string filename) //loads parameters from local (does not matter if running BCI2K locally, just use remote)
-        {//Also it probably doesnt work at the moment
-            StreamReader file;
-            try
-            {
-                file = File.OpenText(filename);
-            }
-            catch (Exception ex)
-            {
-                Result = "Could not open file " + filename + ", " + ex.Message;
-                return false;
-            }
-            string line;
-
-            int errors = 0;
-            while ((line = file.ReadLine()) != null)
-            {
-                errors += Convert.ToInt32(!SimpleCommand("add parameter " + EscapeSpecialChars(line)));//adds number of parameter adds which fail, inverted because a failure will return a false or 0
-            }
-            if (Convert.ToBoolean(errors))
-            {
-                Result = "Could not add " + errors + " parameter(s)";
-            }
-
-            errors = 0;
-            while ((line = file.ReadLine()) != null)
-            {
-                errors += Convert.ToInt32(!SimpleCommand("set parameter " + EscapeSpecialChars(line)));//adds number of parameter adds which fail, inverted because a failure will return a false or 0
-            }
-            if (Convert.ToBoolean(errors))
-            {
-                Result = "Could not set " + errors + " parameter(s)";
-            }
-            return true;
-        }
-
-        public bool LoadParametersRemote(string filename) //loads parameters on the machine on which BCI2K is running
+        public void LoadParameters(string filename) //loads parameters on the machine on which BCI2K is running
         {
-            return SimpleCommand("load parameters \"" + filename + "\"");
+            SimpleCommand("load parameters \"" + filename + "\"");
         }
 
-        public bool AddStateVariable(string name, UInt32 bitWidth, double initialValue)
+        public void AddStateVariable(string name, UInt32 bitWidth, double initialValue)
         {
-            return SimpleCommand("add state \"" + name + "\" " + bitWidth + ' ' + initialValue);
+            SimpleCommand("add state \"" + name + "\" " + bitWidth + ' ' + initialValue);
         }
 
-        public bool SetStateVariable(string name, double value)
+        public void SetStateVariable(string name, double value)
         {
-            return SimpleCommand("set state \"" + name + "\" " + value.ToString());
+            SimpleCommand("set state \"" + name + "\" " + value.ToString());
         }
-        public bool GetStateVariable(string name, ref double outValue)
+        public double GetStateVariable(string name)
         {
-            if (SimpleCommand("get state \"" + name + "\""))
+            SimpleCommand("get state \"" + name + "\"");
+            return double.Parse(GetResponseWithoutPrompt());
+        }
+
+        public void AddEvent(string name, UInt32 bitWidth, UInt32 initialValue) {
+            SimpleCommand("add event \"" + name + "\" " + bitWidth + " " + initialValue);
+        }
+
+        public void SetEvent(string name, UInt32 value)
+        {
+            SimpleCommand("set event " + name + " " + value);
+        }
+
+        public void PulseEvent(string name, UInt32 value)
+        {
+            SimpleCommand("pulse event " + name + " " + value);
+        }
+        public int GetEvent(string name)
+        {
+            SimpleCommand("get event " + name);
+            return int.Parse(GetResponseWithoutPrompt());
+        }
+
+        public double GetSignal(uint channel, uint element)
+        {
+            SimpleCommand("get signal(" + channel + ", " + element + ")");
+            return Double.Parse(GetResponseWithoutPrompt());
+        }
+
+        public void  WaitForSystemState(string state)
+        {
+            SimpleCommand("wait for " + state);
+        }
+
+        public string GetSystemState()
+        {
+            try { 
+                SimpleCommand("get system state");
+                throw new Exception("BCI2000RemoteNET error: Unreachable code reached");
+            } catch (BCI2000CommandException e)
             {
-                try
+                string res = GetResponseWithoutPrompt();
+                if (SYSTEM_STATES.Any(state => res.ToLower().Contains(state.ToLower()))) {
+                    return res;
+                } else
                 {
-                    string res = "";
-                    if (Response.Contains('>')) 
-                        res = Response.Trim(trimChars);
-                    outValue = Double.Parse(res);
-                    return true;
-                }
-                catch (Exception)
-                {
-                    return false;
+                    throw e;
                 }
             }
-            return false;
         }
 
-        public bool WaitForSystemState(string state)
-        {
-            return SimpleCommand("wait for " + state);
-        }
-
-        public bool GetSystemState(ref string outState)
-        {
-            bool success = SimpleCommand("get system state");
-            outState = Response;
-            return success;
-        }
-
-        public bool SimpleCommand(string command)
+        public void SimpleCommand(string command)
         {
             Execute(command);
-            return string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Contains(">"); //returns true if Result is empty or nonzero
-        }
-
-
-        public int GetEvent(string eventName)
-        {
-            if (!(SimpleCommand("get event " + eventName))) {
-                throw new ArgumentException("Event " + eventName + " does not exist.");
-            }
-
-            return Atoi(Response);
+            //fails if Result is not empty or nonzero
+            //This does mean that SimpleCommand will always throw an exception when receiving a text response.
+            //All methods in the BCI2000Remote class are designed with tbis in mind, and will catch the error if necessary.
+            if (!(string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Contains(">")))
+            {
+                throw new BCI2000CommandException("Command \"" + command + "\" failed. Check BCI2000 log for details. Response: " + Response);
+            } 
         }
 
         private string EscapeSpecialChars(string str)
@@ -355,8 +336,14 @@ namespace BCI2000RemoteNET
         }
 
 
+        private string GetResponseWithoutPrompt()
+        {
+            return Response.Trim(TRIM_CHARS);
+        }
 
-        private int Atoi(string str)//implementation of c atoi() since original code uses it
+
+        // Equivalents of C functions used in BCI2000Remote
+        private int Atoi(string str)
         {
             int output;
             try
@@ -370,7 +357,7 @@ namespace BCI2000RemoteNET
             return output;
         }
 
-        private bool Stricmp(string str1, string str2) // implementation of c stricmp
+        private bool Stricmp(string str1, string str2) 
         {
             if (str1 == null || str2 == null)
                 return false;
