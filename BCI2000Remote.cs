@@ -103,15 +103,24 @@ namespace BCI2000RemoteNET
         }
 	
 	//Connects to operator and immediately runs BCI2000Shell commands given as an argument.
-        public bool Connect(string[] initCommands)
+        public bool Connect(string[] initCommands, string[] eventNames)
         {
             bool success = Connect();
             foreach (string command in initCommands)
             {
                 SimpleCommand(command);
             }
+            foreach (string evn in eventNames)
+            {
+                AddEvent(evn, 32, 0);
+            }
             return success;
         }
+        public bool Connect(string[] initCommands)
+        {
+            return Connect(initCommands, new string[0]);
+        }
+        
         public override bool Connect()
         {
             bool success = base.Connect();
@@ -278,7 +287,7 @@ namespace BCI2000RemoteNET
 
         public double GetSignal(uint channel, uint element)
         {
-            SimpleCommand("get signal(" + channel + ", " + element + ")");
+            SimpleCommand("get signal(" + channel + "," + element + ")");
             return Double.Parse(GetResponseWithoutPrompt());
         }
 
