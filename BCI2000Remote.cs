@@ -234,21 +234,18 @@ namespace BCI2000RemoteNET
         public string GetParameter(string name)
         {
             int outCode = 0;
-            Execute("is parameter \"" + name + "\"", ref outCode);
-            if (outCode == 1)//name is a valid parameter
-            {
-                Execute("get parameter \"" + name + "\"");
-                return Response;
-            }
-            else
-            {
-                throw new BCI2000CommandException(name + " is not a valid parameter name");
-            }
+            SimpleCommand("get parameter \"" + name + "\"");
+            return GetResponseWithoutPrompt();
         }
 
         public void LoadParameters(string filename) //loads parameters on the machine on which BCI2K is running
         {
             SimpleCommand("load parameters \"" + filename + "\"");
+        }
+
+        public void AddParameter(string section, string name, string defaultValue, string minValue, string maxValue)
+        {
+            SimpleCommand("add parameter section variant" + name + "= " + defaultValue ?? "%" + minValue ?? "%" + maxValue ?? "%");
         }
 
         public void AddStateVariable(string name, UInt32 bitWidth, double initialValue)
@@ -282,7 +279,14 @@ namespace BCI2000RemoteNET
         public int GetEvent(string name)
         {
             SimpleCommand("get event " + name);
-            return int.Parse(GetResponseWithoutPrompt());
+            string res = GetResponseWithoutPrompt();
+            try
+            {
+                return int.Parse(res);
+            } catch (FormatException e)
+            {
+                throw new FormatException("Format exception when getting event " + name + ", received response: \"" + res + "\"");
+            }
         }
 
         public double GetSignal(uint channel, uint element)
