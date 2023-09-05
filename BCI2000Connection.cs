@@ -19,6 +19,12 @@ using System.Net.Sockets;
 
 namespace BCI2000RemoteNET
 {
+
+    /**
+     * This was adapted from a C++ library, and as such, directly transliterated the C++ programming style.
+     * This will probably change at some point, and this code will look more like actual c#.
+     * 
+     */
     public class BCI2000Connection
     {
         private const int defaultTimeout = 1000;
@@ -225,7 +231,6 @@ namespace BCI2000RemoteNET
             }
             catch (SocketException ex)
             {
-                throw new BCI2000ConnectionException("Failed to connect to " + TelnetIp + ":" + TelnetPort + ", " + ex.Message);
                 success = false;
             }
 
@@ -235,7 +240,6 @@ namespace BCI2000RemoteNET
                 return false;
             }
 
-            operator_stream = new NetworkStream(tcp.Client);
 
             if (!success) //tcp has not connected to running operator, so it will try to open a new operator and connect
             {
@@ -263,6 +267,7 @@ namespace BCI2000RemoteNET
                 try//connect to started operator
                 {
                     tcp.Connect("127.0.0.1", TelnetPort);
+                    operator_stream = new NetworkStream(tcp.Client);
                 }
                 catch (SocketException ex)
                 {
@@ -310,20 +315,37 @@ namespace BCI2000RemoteNET
             catch (SocketException ex)
             {
                 Result = "SocketException: " + ex + ", socket error code " + ex.SocketErrorCode;
+                throw ex;
                 return false;
             }
            
             return ProcessResponse(ref outCode);
         }
 
+
+        private bool endsWithPrompt(StringBuilder line)
+        {
+            string lineTrim = line.ToString().Trim();
+            if (lineTrim.Length == 0) return false;
+            return lineTrim.Substring(lineTrim.Length - 1).Equals(Prompt);
+        }
+
+        /// <summary>
+        /// Processes the response from BCI2000. Response will be set to the last line of received data that is not a prompt character.
+        /// </summary>
+        /// <param name="outCode"></param>
+        /// <returns></returns>
+        /// <exception cref="BCI2000ConnectionException"></exception>
         public bool ProcessResponse(ref int outCode)
         {
             Response = "";
             byte[] buffer = new byte[1024];
-            StringBuilder line = new StringBuilder();
-            while (Connected() && (!(line.ToString().Equals(Prompt))) || operator_stream.DataAvailable)
+            StringBuilder line = new StringBuilder("", 100);
+            while (Connected() && (!endsWithPrompt(line)
+                || operator_stream.DataAvailable)) //break loop only if no more data to read and last character received was prompt.
                 {
-                char c = (char) operator_stream.ReadByte();
+
+                char c = operator_stream.DataAvailable ? (char) operator_stream.ReadByte() : (char) 0x0; // if waiting for prompt, add nothing to data stream.
                 if (c == '\n' || c == -1) // -1 means all data has been read
                 {
                     string responseUnprocessed = line.ToString();
@@ -375,7 +397,7 @@ namespace BCI2000RemoteNET
                     }
                     line.Clear();
                 }
-                if (c != '\r')
+                if (c != '\r' && c != 0x0)
                 {
                     line.Append(c);
                 }

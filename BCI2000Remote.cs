@@ -320,13 +320,6 @@ namespace BCI2000RemoteNET
         public void SimpleCommand(string command)
         {
             Execute(command);
-            //fails if Result is not empty or nonzero
-            //This does mean that SimpleCommand will always throw an exception when receiving a text response.
-            //All methods in the BCI2000Remote class are designed with tbis in mind, and will catch the error if necessary.
-            if (!(string.IsNullOrWhiteSpace(Response) || Atoi(Response) != 0 || Response.Contains(">")))
-            {
-                throw new BCI2000CommandException("Command \"" + command + "\" failed. Check BCI2000 log for details. Response: " + Response);
-            } 
         }
 
         private string EscapeSpecialChars(string str)
