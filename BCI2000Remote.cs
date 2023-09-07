@@ -289,8 +289,16 @@ namespace BCI2000RemoteNET
             }
         }
 
-        public double GetSignal(uint channel, uint element)
+        public double GetSignal(int channel, int element)
         {
+            if (channel < 1)
+            {
+                throw new BCI2000CommandException("Signal channel cannot be less than 1");
+            }
+            if (element < 1)
+            {
+                throw new BCI2000CommandException("Signal element cannot be less than 1");
+            }
             SimpleCommand("get signal(" + channel + "," + element + ")");
             return Double.Parse(GetResponseWithoutPrompt());
         }
