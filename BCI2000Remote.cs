@@ -245,7 +245,7 @@ namespace BCI2000RemoteNET
 
         public void AddParameter(string section, string name, string defaultValue, string minValue, string maxValue)
         {
-            SimpleCommand("add parameter section variant" + name + "= " + defaultValue ?? "%" + minValue ?? "%" + maxValue ?? "%");
+            SimpleCommand($"add parameter {section} variant" + name + "= " + defaultValue ?? "%" + minValue ?? "%" + maxValue ?? "%");
         }
 
         public void AddStateVariable(string name, UInt32 bitWidth, double initialValue)
