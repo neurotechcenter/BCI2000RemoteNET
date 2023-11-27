@@ -103,22 +103,22 @@ namespace BCI2000RemoteNET
         }
 	
 	//Connects to operator and immediately runs BCI2000Shell commands given as an argument.
-        public bool Connect(string[] initCommands, string[] eventNames)
+        public bool Connect(string[] initCommands, (string, uint)[] eventNames)
         {
             bool success = Connect();
             foreach (string command in initCommands)
             {
                 SimpleCommand(command);
             }
-            foreach (string evn in eventNames)
+            foreach (var evn in eventNames)
             {
-                AddEvent(evn, 32, 0);
+                AddEvent(evn.Item1, evn.Item2, 0);
             }
             return success;
         }
         public bool Connect(string[] initCommands)
         {
-            return Connect(initCommands, new string[0]);
+            return Connect(initCommands, new  (string, uint)[0]);
         }
         
         public override bool Connect()
