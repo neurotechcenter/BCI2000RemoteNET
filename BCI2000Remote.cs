@@ -228,13 +228,13 @@ namespace BCI2000RemoteNET
 
         public void SetParameter(string name, string value)
         {
-            SimpleCommand("set parameter \"" + name + "\" \"" + value + "\"");
+            SimpleCommand("set parameter " + name + " " + value);
         }
 
         public string GetParameter(string name)
         {
             int outCode = 0;
-            SimpleCommand("get parameter \"" + name + "\"");
+            SimpleCommand("get parameter " + name);
             return GetResponseWithoutPrompt();
         }
 
