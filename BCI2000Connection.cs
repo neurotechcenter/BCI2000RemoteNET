@@ -267,7 +267,6 @@ namespace BCI2000RemoteNET
                 try//connect to started operator
                 {
                     tcp.Connect("127.0.0.1", TelnetPort);
-                    operator_stream = new NetworkStream(tcp.Client);
                 }
                 catch (SocketException ex)
                 {
@@ -279,13 +278,15 @@ namespace BCI2000RemoteNET
                 TerminateOperator = true;
             }
 
+            operator_stream = new NetworkStream(tcp.Client);
+
             tcp.SendTimeout = Timeout;
             tcp.ReceiveTimeout = Timeout;
 
+            Execute("change directory $BCI2000LAUNCHDIR");
+
             WindowTitle = windowTitle;
             WindowVisible = windowVisible;
-
-            Execute("change directory $BCI2000LAUNCHDIR");
 
             return true;
         }
