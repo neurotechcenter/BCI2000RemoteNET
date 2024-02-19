@@ -47,6 +47,9 @@ namespace BCI2000RemoteNET
         private const string TerminationTag = "\\Terminating";
         private const string Prompt = ">";
 
+	///<summary>
+	/// Write commands and responses to a log file
+	///</summary>
 	public bool LogOutput { get; set; }
 
         private string logFile;
@@ -70,13 +73,30 @@ namespace BCI2000RemoteNET
         
         private bool LastLogState { get; set; } //was the last thing sent a command to set state
 
+	/// <summary>
+	/// Log state send commands
+	/// </summary>
         public bool LogStates { get; set; } //sets whether to log commands to set state, along with the received prompts afterwards
+	/// <summary>
+	/// Log '>' characters received from Operator shell interface
+	/// </summary>
         public bool LogPrompts { get; set; } //sets whether to log all received prompts
 
 
         //changes to these will only take effect on Connect()
+	/// <summary>
+	/// TCP connection timeout
+	/// </summary>
         public int Timeout { get; set; } //send and recieve timeout in ms
+	/// <summary>
+	/// IP address of remote operator. If set, will try to connect to a runningoperator located at this IP.
+	/// Make sure to specify this address and port when starting the operator vis the <c>--telnet</c> command line argument
+	/// If not set, will start local operator given by <see cref="OperatorPath">OperatorPath</see>
+	/// </summary>
         public string TelnetIp { get; set; }
+	/// <summary>
+	/// Port of remote operator to connect to.
+	/// </summary>
         public Int32 TelnetPort { get; set; }
         public string OperatorPath { get; set; }
 
