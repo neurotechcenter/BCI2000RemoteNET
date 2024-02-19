@@ -47,6 +47,8 @@ namespace BCI2000RemoteNET
         private const string TerminationTag = "\\Terminating";
         private const string Prompt = ">";
 
+	public bool LogOutput { get; set; }
+
         private string logFile;
         public string LogFile
         {
@@ -440,13 +442,15 @@ namespace BCI2000RemoteNET
         }
         private void WriteLog(string logPreface, string toLog)
         {
-            if (Log == null)
-                Log = new StreamWriter(LogFile);
-            if (Log != null && !String.IsNullOrWhiteSpace(toLog))
-            {
-                Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + ' ' + logPreface + ' ' + toLog);
-                Log.Flush();
-            }
+	    if (LogOutput) {
+		if (Log == null)
+		    Log = new StreamWriter(LogFile);
+		if (Log != null && !String.IsNullOrWhiteSpace(toLog))
+		{
+		    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + ' ' + logPreface + ' ' + toLog);
+		    Log.Flush();
+		}
+	    }
         }
 
 
