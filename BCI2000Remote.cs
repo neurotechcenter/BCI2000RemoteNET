@@ -1,385 +1,309 @@
-﻿///////////////////////////////////////////////////////////////////////
-// Author: tytbutler@yahoo.com
-// Description: A class for controlling BCI2000 remotely from a .NET
-//      application. Does not depend on BCI2000 framework.
-//      On Error, a function returns false, and errors raised by 
-//      the class are stored in Result, and errors raised by the
-//      Operator are stored in Received.
-//
-//      Adapted from the C++ BCI2000Remote
-// (C) 2000-2021, BCI2000 Project
-// http://www.bci2000.org
-///////////////////////////////////////////////////////////////////////
-
+/////////////////////////////////////////////////////////////////////////////
+/// This file is a part of BCI2000RemoteNET, a library
+/// for controlling BCI2000 <http://bci2000.org> from .NET programs.
+///
+///
+///
+/// BCI20000RemoteNET is free software: you can redistribute it
+/// and/or modify it under the terms of the GNU General Public License
+/// as published by the Free Software Foundation, either version 3 of
+/// the License, or (at your option) any later version.
+///
+/// This program is distributed in the hope that it will be useful,
+/// but WITHOUT ANY WARRANTY; without even the implied warranty of
+/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+/// GNU General Public License for more details.
+/// 
+/// You should have received a copy of the GNU General Public License
+/// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+///////////////////////////////////////////////////////////////////////////
 
 using System;
-using System.Linq;
-using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
-using System.IO;
 
-namespace BCI2000RemoteNET
-{
-    public class BCI2000Remote : BCI2000Connection //All public methods are boolean and return true if they succeed, false if they fail. Data output is handled by passing a reference.
-    {
-        private string subjectID;
-        public string SubjectID
+namespace BCI2000RemoteNET {
+    class BCI2000Remote {
+	//Size of the input read buffer. Should be larger than the largest possible response from BCI2000.
+	private const int READ_BUFFER_SIZE = 2048;
+
+	///<summary>
+	/// Timeout value (in milliseconds) of connection to BCI2000
+	///</summary>
+	public int Timeout{ get; set; } = 1000;
+
+	///<summary>
+	/// Terminate operator when this object is deleted
+	/// </summary>
+	public bool TerminateOperatorOnDisconnect { get; set; } = true;
+
+	private string windowTitle = "";
+	///<summary>
+	/// The title of the BCI2000 window
+	///</summary>
+	public string WindowTitle {
+	    get {
+		return windowTitle;
+	    }
+	    set {
+		windowTitle = value;
+		if (Connected()) {
+		    Execute($"set title \"{windowTitle}\"");
+		}
+	    }
+	}
+
+	private bool hideWindow;
+	///<summary>
+	/// Hide the BCI2000 window
+	///</summary>
+	private bool HideWindow {
+	    get {
+		return hideWindow;
+	    }
+	    set {
+		hideWindow = value;
+		if (Connected()) {
+		    switch (hideWindow) {
+			case false:
+			    Execute("show window");
+			    break;
+			case true:
+			    Execute("hide window");
+			    break;
+		    }
+		}
+	    }
+	}
+
+
+	~BCI2000Remote() {
+	    Disconnect();
+	}
+
+	///<summary>
+	///Disconnects from the operator. Terminated the operator if <see cref="TerminateOperatorOnDisconnect"/> is set.
+	///</summary>
+	public void Disconnect() {
+	    if (TerminateOperatorOnDisconnect && Connected()) {
+		Quit();
+	    }
+	    if (connection != null) {
+		connection.Close();
+		connection = null; //This might be redundant
+	    }
+	}
+
+	///<summary>
+	/// Starts an instance of the BCI2000 Operator on the local machine.
+	///</summary>
+	///<param name="operatorPath">The location of the operator binary</param>
+	///<param name="address"> The address on which the Operator will listen for input. Leave as default if you will only connect from the local system.
+	/// Note on security: BCI2000Remote uses an unencrypted, unsecured telnet connection. Anyone who can access the connection can run BCI2000 shell scripts. 
+	/// As such, avoid leaving BCI2000 open with its telnet port open unsupervised if it is set to an adress other than localhost (127.0.0.1),
+	/// and take caution when exposing the BCI2000 telnet interface on a port forwarded outside of your local network.
+	///</param>
+	///<param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed.</param>
+	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999) {
+	    if (port < 0 || port > 65535) {
+		throw new BCI2000ConnectionException($"Port number {port} is not valid");
+	    }
+	    IPAddress addr = IPAddress.Parse(address);
+	    connection = new TcpClient();
+	    try {
+		connection.Connect(address, port);
+		connection.Close();
+		connection = null;
+		throw new BCI2000ConnectionException($"There is already something running at {address}:{port}, is BCI2000 already running?");
+	    } catch (SocketException) {
+		//Socket should not connect if BCI2000 is not already running
+	    }
+	    connection = null;
+
+	    StringBuilder arguments = new StringBuilder();
+	    arguments.Append($" --Telnet \"{addr.ToString()}:{port}\" ");
+	    arguments.Append(" --StartupIdle ");
+	    if (!string.IsNullOrEmpty(WindowTitle)) {
+		arguments.Append($" --Title \"{WindowTitle}\" ");
+	    }
+	    if (HideWindow) {
+		arguments.Append(" --Hide ");
+	    }
+	    try {
+		System.Diagnostics.Process.Start(operatorPath, arguments.ToString());
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Could not start operator at path {operatorPath}: {ex.ToString()}");
+	    }
+	}
+
+	///<summary>
+	///Establishes a connection to an instance of BCI2000 running at the specified address and port.
+	///</summary>
+	///<param name="address">The IPv4 address to connect to. Note that this may not necessarily be the same as the one used in <see cref="StartOperator">StartOperator</see>, even if running BCI2000 locally. For example, if the operator was started on the local machine with address <c>0.0.0.0</c>, you would connect to it at address <c>127.0.0.1</c></param>
+	///<param name="port">The port on which BCI2000 is listening. If BCI2000 was started locally with <see cref="StartOperator">StartOperator</see>, this must be the same value.</param>
+	public void Connect(string address = "127.0.0.1", int port = 3999) {
+	    if (port < 0 || port > 65535) {
+		throw new BCI2000ConnectionException($"Port number {port} is not valid");
+	    }
+	    IPAddress addr = IPAddress.Parse(address);
+
+	    if (Connected()) {
+		throw new BCI2000ConnectionException("Connect() called while already connected. Call Disconnect() first.");
+	    }
+	    if (connection != null) {
+		throw new BCI2000ConnectionException("Connect called while connection is null. This should not happen and is likely a bug. Please report to the maintainer.");
+	    }
+	    connection = new TcpClient();
+	    try {
+		connection.Connect(addr, port);
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Could not connect to operator at {addr.ToString()}:{port}, {ex.ToString()}");
+	    }
+
+	    op_stream = connection.GetStream();
+
+	    connection.SendTimeout = Timeout;
+	    connection.ReceiveTimeout = Timeout;
+
+	    Execute("change directory $BCI2000LAUNCHDIR");
+	}
+
+	///<summary>
+	///Gets whether or not this BCI2000Remote instance is currently connected to the BCI2000 Operator
+	///</summary>
+	///<returns>Whether or not this object is currently connected to BCI2000</returns>
+	public bool Connected() {
+	    return connection?.Connected ?? false;
+	}
+
+	///<summary>
+	///Shuts down the connected BCI2000 instance
+	///</summary>
+	public void Quit() {
+	    Execute("Quit");
+	}
+
+	///<summary>
+	/// BCI2000 Operator states of operation, as documented on the <anchor xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bci2000.org/mediawiki/index.php/User_Reference:Operator_Module_Scripting#WAIT_FOR_%3Csystem_state%3E_[%3Ctimeout_seconds%3E]">BCI2000 Wiki</anchor>
+	/// </summary>
+	public enum SystemState {
+	    Idle,
+	    Startup,
+	    Connected,
+	    Resting,
+	    Suspended,
+	    ParamsModified,
+	    Running,
+	    Termination,
+	    Busy
+	}
+	///<summary>
+	///Waits for the system to be in the specified state.
+	///This will block until the system is in the specified state.
+	///</summary>
+	///<param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	///<returns>True if the system state was reached within the timeout time.</returns>
+	public bool WaitForSystemState(SystemState state, double? timeout = null) {
+	    return Execute<bool>($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
+	}
+
+
+	///<summary>
+	///Executes the given command and returns the result as type <typeparamref name="T"/>. Throws if the response cannot be parsed as <typeparamref name="T"/>. If you are trying to execute a command which does not produce output, use <see cref="Execute(string, bool)"/>.
+	///</summary>
+	///<typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
+	///<param name="command">The command to execute</param>
+	public T Execute<T>(string command) where T : IParsable<T> {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAs<T>();
+	}
+
+	///<summary>
+	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
+	///</summary>
+	///<param name="command">The command to send to BCI2000</param>
+	///<param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
+	public void Execute(string command, bool expectEmptyResponse = true) {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    if (expectEmptyResponse) {
+		ExpectEmptyResponse();
+	    } else {
+		DiscardResponse();
+	    }
+	}
+
+	//Sends command to BCI2000
+	private void SendCommand(string command){
+	    try {
+		op_stream.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
+	    }
+	}
+
+	//Gets the response from the operator and attempts to parse into the given type
+	private T GetResponseAs<T>() where T : IParsable<T> {
+	    string resp = ReceiveResponse();
+	    try {
+		T result = T.Parse(resp, null);
+		return result;
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response {resp} as type {nameof(T)}, {ex}");
+	    }
+
+	}
+
+	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
+	private void ExpectEmptyResponse() { 
+	    string resp = ReceiveResponse();
+	    if (!string.IsNullOrWhiteSpace(resp)) {
+		throw new BCI2000CommandException($"Expected empty response but received {resp} instead");
+	    }
+	}
+
+	//Receives response and discards the result.
+	private void DiscardResponse() {
+	    ReceiveResponse();
+	}
+
+	private byte[] recv_buffer = new byte[READ_BUFFER_SIZE];
+	//Receives response from the operator. Blocks until the prompt character ('>') is received.
+	private string ReceiveResponse() {
+	    StringBuilder response = new StringBuilder();
+	    while (true) {
+		int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
+		if (read > 0) { 
+		    string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
+		    if (EndsWithPrompt(resp_fragment) && !op_stream.DataAvailable) {
+			//Stop reading if previous response ended with prompt and no data is available
+			break;
+		    } else {
+			response.Append(resp_fragment);
+		    }
+		}
+	    }
+	    return response.ToString();
+	}
+
+        private bool EndsWithPrompt(string line)
         {
-            get
-            {
-                return subjectID;
-            }
-            set
-            {
-                subjectID = value;
-                if (Connected() && !String.IsNullOrEmpty(subjectID))
-                    Execute("set parameter SubjectName \"" + subjectID + "\"");
-            }
+            string lineTrim = line.ToString().Trim();
+            if (lineTrim.Length == 0) return false;
+            return lineTrim.Substring(lineTrim.Length - 1).Equals(Prompt);
         }
 
-        private string sessionID;
-        public string SessionID
-        {
-            get
-            {
-                return sessionID;
-            }
-            set
-            {
-                sessionID = value;
-                if (Connected() && !String.IsNullOrEmpty(sessionID))
-                    Execute("set parameter SubjectSession \"" + sessionID + "\"");
-            }
-        }
+	private TcpClient connection;
+	private NetworkStream op_stream;
 
-        private string dataDirectory;
-        public string DataDirectory
-        {
-            get
-            {
-                return dataDirectory;
-            }
-            set
-            {
-                dataDirectory = value;
-                if (Connected() && !String.IsNullOrEmpty(dataDirectory))
-                    Execute("set parameter DataDirectory \"" + dataDirectory + "\"");
-            }
-        }
-
-        private const bool defaultStopOnQuit = true;
-        private const bool defaultDisconnectOnQuit = true;
-
-        public bool StopOnQuit { get; set; }
-        public bool DisconnectOnQuit { get; set; }
-
-
-        private readonly char[] TRIM_CHARS =  new char[] { '\r', '\n', ' ', '>' };
-
-        private readonly string[] SYSTEM_STATES = new string[] {"unavailable",
-            "idle",
-            "startup",
-            "initialization",
-            "resting",
-            "suspended",
-            "paramsmodified",
-            "running",
-            "termination",
-            "busy"}; 
-
-        public BCI2000Remote()
-        {
-            StopOnQuit = defaultStopOnQuit;
-            DisconnectOnQuit = defaultDisconnectOnQuit;
-
-        }
-
-        ~BCI2000Remote()
-        {
-            if (StopOnQuit)
-                Stop();
-            if (DisconnectOnQuit)
-                Disconnect();
-        }
-	
-	//Connects to operator and immediately runs BCI2000Shell commands given as an argument.
-        public bool Connect(string[] initCommands, (string, uint)[] eventNames)
-        {
-            bool success = Connect();
-            foreach (string command in initCommands)
-            {
-                SimpleCommand(command);
-            }
-            foreach (var evn in eventNames)
-            {
-                AddEvent(evn.Item1, evn.Item2, 0);
-            }
-            return success;
-        }
-        public bool Connect(string[] initCommands)
-        {
-            return Connect(initCommands, new  (string, uint)[0]);
-        }
-        
-        public override bool Connect()
-        {
-            bool success = base.Connect();
-            if (success)
-            {
-                if (!String.IsNullOrEmpty(SubjectID))
-                    SubjectID = subjectID;
-                if (!String.IsNullOrEmpty(SessionID))
-                    SessionID = sessionID;
-                if (!String.IsNullOrEmpty(DataDirectory))
-                    DataDirectory = dataDirectory;
-            }
-            return success;
-        }
-
-        /**
-         * 
-         * takes module and arguments in the form of a dictionary with the keys being module names and value being a list of arguments
-         * uses lists and dictionary because parsing strings is annoying
-         * pass null as a value for no arguments other than --local
-         * arguments don't need "--" in front, and whitespace is removed
-         * 
-         * 
-         * **/
-        public bool StartupModules(Dictionary<string, List<string>> modules)
-        {
-            Execute("shutdown system");
-            Execute("startup system localhost");
-            StringBuilder errors = new StringBuilder();
-            int outCode = 0;
-            foreach (KeyValuePair<string, List<string>> module in modules)
-            {
-                StringBuilder moduleAndArgs = new StringBuilder(module.Key + ' ');
-                bool containsLocal = false;
-                if (module.Value != null && module.Value.Count > 0)
-                {
-                    foreach (string argument in module.Value)
-                    {
-                        string argumentNoWS = new string(argument.Where(c => !Char.IsWhiteSpace(c)).ToArray());
-                        if (!argumentNoWS.StartsWith("--"))//add dashes to beginning
-                            argumentNoWS = "--" + argumentNoWS;
-                        if (argumentNoWS.IndexOf("--local", StringComparison.OrdinalIgnoreCase) >= 0)
-                            containsLocal = true;
-                        moduleAndArgs.Append(argumentNoWS + ' ');
-                    }
-                }
-                if (!containsLocal)//according to original, all modules start with option --local; appends --local to command
-                    moduleAndArgs.Append("--local ");
-
-                Execute("start executable " + moduleAndArgs.ToString(), ref outCode);
-                if (outCode != 1)
-                {
-                    errors.Append('\n' + module.Key + " returned " + outCode);
-                }
-                Result = errors.ToString();
-            }
-            if (!String.IsNullOrWhiteSpace(errors.ToString())) //errors while starting up modules
-            {
-                Result = "Could not start modules: " + errors.ToString();
-                return false;
-            }
-            WaitForSystemState("Connected");
-
-            return true;
-        }
-
-        public bool SetConfig()
-        {
-            SubjectID = subjectID;
-            SessionID = sessionID;
-            DataDirectory = dataDirectory;
-            Execute("capture messages none warnings errors");
-            SimpleCommand("set config");
-            WaitForSystemState("Resting|Initialization");
-            Execute("capture messages none");
-            Execute("get system state");
-            //bool success = !ResponseContains("Resting");
-            Execute("flush messages");
-            bool success = true;
-            return success;
-        }
-
-        public void Start()
-        {
-            bool success = true;
-            Execute("get system state");
-            if (ResponseContains("Running"))
-            {
-                Console.Write("System is already running");
-            }
-            else if (!ResponseContains("Resting") && !ResponseContains("Suspended"))
-                SetConfig();
-            SimpleCommand("start system");
-        }
-
-        public void Stop()
-        {
-            Execute("get system state");
-            if (!ResponseContains("Running"))
-            {
-                Console.Write("System is not running");
-            }
-            SimpleCommand("stop system");
-        }
-
-        public void SetParameter(string name, string value)
-        {
-            SimpleCommand("set parameter " + name + " " + value);
-        }
-
-        public string GetParameter(string name)
-        {
-            int outCode = 0;
-            SimpleCommand("get parameter " + name);
-            return GetResponseWithoutPrompt();
-        }
-
-        public void LoadParameters(string filename) //loads parameters on the machine on which BCI2K is running
-        {
-            SimpleCommand("load parameters \"" + filename + "\"");
-        }
-
-        public void AddParameter(string section, string name, string defaultValue, string minValue, string maxValue)
-        {
-            SimpleCommand($"add parameter {section} variant" + name + "= " + defaultValue ?? "%" + minValue ?? "%" + maxValue ?? "%");
-        }
-
-        public void AddStateVariable(string name, UInt32 bitWidth, double initialValue)
-        {
-            SimpleCommand("add state \"" + name + "\" " + bitWidth + ' ' + initialValue);
-        }
-
-        public void SetStateVariable(string name, double value)
-        {
-            SimpleCommand("set state \"" + name + "\" " + value.ToString());
-        }
-        public double GetStateVariable(string name)
-        {
-            SimpleCommand("get state \"" + name + "\"");
-            return double.Parse(GetResponseWithoutPrompt());
-        }
-
-        public void AddEvent(string name, UInt32 bitWidth, UInt32 initialValue) {
-            SimpleCommand("add event \"" + name + "\" " + bitWidth + " " + initialValue);
-        }
-
-        public void SetEvent(string name, UInt32 value)
-        {
-            SimpleCommand("set event " + name + " " + value);
-        }
-
-        public void PulseEvent(string name, UInt32 value)
-        {
-            SimpleCommand("pulse event " + name + " " + value);
-        }
-        public int GetEvent(string name)
-        {
-            SimpleCommand("get event " + name);
-            string res = GetResponseWithoutPrompt();
-            try
-            {
-                return int.Parse(res);
-            } catch (FormatException e)
-            {
-                throw new FormatException("Format exception when getting event " + name + ", received response: \"" + res + "\"");
-            }
-        }
-
-        public double GetSignal(int channel, int element)
-        {
-            if (channel < 1)
-            {
-                throw new BCI2000CommandException("Signal channel cannot be less than 1");
-            }
-            if (element < 1)
-            {
-                throw new BCI2000CommandException("Signal element cannot be less than 1");
-            }
-            SimpleCommand("get signal(" + channel + "," + element + ")");
-            return Double.Parse(GetResponseWithoutPrompt());
-        }
-
-        public void  WaitForSystemState(string state)
-        {
-            SimpleCommand("wait for " + state);
-        }
-
-        public string GetSystemState()
-        {
-            try { 
-                SimpleCommand("get system state");
-                throw new Exception("BCI2000RemoteNET error: Unreachable code reached");
-            } catch (BCI2000CommandException e)
-            {
-                string res = GetResponseWithoutPrompt();
-                if (SYSTEM_STATES.Any(state => res.ToLower().Contains(state.ToLower()))) {
-                    return res;
-                } else
-                {
-                    throw e;
-                }
-            }
-        }
-
-        public void SimpleCommand(string command)
-        {
-            Execute(command);
-        }
-
-        private string EscapeSpecialChars(string str)
-        {
-            string escapeChars = "#\"${}`&|<>;\n";
-            StringBuilder stringFinal = new StringBuilder();
-            char[] chars = str.ToCharArray();
-            for (int c = 0; c < chars.Length; c++)
-            {
-                Byte charBit = Convert.ToByte(chars[c]);
-                if (escapeChars.Contains(chars[c]) || charBit < 32 || charBit > 128)
-                {
-                    //Byte CharBitChanged = (Byte)((charBit >> 4) | (charBit & 0xf));
-                    stringFinal.Append('%' + BitConverter.ToString(new byte[] { charBit }));
-                }
-                else
-                    stringFinal.Append(chars[c]);
-            }
-            return stringFinal.ToString();
-        }
-
-
-        private string GetResponseWithoutPrompt()
-        {
-            return Response.Trim(TRIM_CHARS);
-        }
-
-
-        // Equivalents of C functions used in BCI2000Remote
-        private int Atoi(string str)
-        {
-            int output;
-            try
-            {
-                output = int.Parse(str);
-            }
-            catch (FormatException)
-            {
-                output = 0;
-            }
-            return output;
-        }
-
-        private bool Stricmp(string str1, string str2) 
-        {
-            if (str1 == null || str2 == null)
-                return false;
-            return str1.IndexOf(str2, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-        private bool ResponseContains(string str1)//using stricmp on result is annoying
-        {
-            return Stricmp(Response, str1);
-        }
+        private const string ReadlineTag = "\\AwaitingInput:";
+        private const string AckTag = "\\AcknowledgedInput";
+        private const string ExitCodeTag = "\\ExitCode";
+        private const string TerminationTag = "\\Terminating";
+        private const string Prompt = ">";
     }
 }
