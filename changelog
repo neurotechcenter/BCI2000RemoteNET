@@ -1,7 +1,9 @@
 BCI2000RemoteNET now targets .NET 8
 
-BCI2000Connection and BCI2000Remote have been merged into one.
+BCI2000Remote no longer inherits from BCI2000Connection, and instead has a
+public member BCI2000Connection.
 
+Execute can still be called, through the member connection variable.
 
 Execute now takes a type parameter specifying the expected return type. The
 program will attempt to parse the received response as the return type if it

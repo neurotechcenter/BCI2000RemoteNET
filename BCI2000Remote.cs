@@ -19,169 +19,59 @@
 ///////////////////////////////////////////////////////////////////////////
 
 using System;
-using System.Net;
-using System.Net.Sockets;
+using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 
 namespace BCI2000RemoteNET {
+    ///<summary>
+    ///Provides functionality for control of BCI2000.
     class BCI2000Remote {
-	//Size of the input read buffer. Should be larger than the largest possible response from BCI2000.
-	private const int READ_BUFFER_SIZE = 2048;
-
 	///<summary>
-	/// Timeout value (in milliseconds) of connection to BCI2000
+	///The <see cref="BCI2000Connection"/> which handles connection with BCI2000
+	///Note: It is defined as readonly because I can see no possible case in which it would be useful to swap connections in a BCI2000Remote object, especially as BCI2000Remote holds no state.
 	///</summary>
-	public int Timeout{ get; set; } = 1000;
+	public readonly BCI2000Connection connection;
 
 	///<summary>
-	/// Terminate operator when this object is deleted
-	/// </summary>
-	public bool TerminateOperatorOnDisconnect { get; set; } = true;
-
-	private string windowTitle = "";
-	///<summary>
-	/// The title of the BCI2000 window
+	///Constructor for <see cref="BCI2000Remote"/>
 	///</summary>
-	public string WindowTitle {
-	    get {
-		return windowTitle;
-	    }
-	    set {
-		windowTitle = value;
-		if (Connected()) {
-		    Execute($"set title \"{windowTitle}\"");
+	///<param name="connection">Connection object which is connected to a BCI2000 instance. Can be set to connect after this object is constructed as long as no methods of this class which require communication with BCI2000 are called beforehand</param
+	public BCI2000Remote(BCI2000Connection connection) {
+	    this.connection = connection;
+	}
+
+	///<summary>
+	/// Starts up the specified BCI2000 modules. 
+	///</summary>
+	///<param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional.</param>
+	public void StartupModules(Dictionary<string, List<string>> modules) {
+	    foreach((string mod_name, List<string> mod_args) in modules) {
+		//Format arguments to start with --
+		var args_p = mod_args.Select(arg => {
+			arg = arg.Trim();
+			if (!arg.StartsWith("--")) {
+				arg = "--" + arg;
+			}
+			return arg;
+		    });
+
+		string args_str = args_p.Aggregate(new StringBuilder(),
+			(builder, arg) => {
+			    builder.Append(" ");
+			    return builder.Append(arg);
+			},
+			builder => builder.ToString());
+
+		//Add --local argument if it does not exist in list
+		if (args_p.Where(str => str.Equals("--local")).Count() == 0) {
+		    args_str = " --local" + args_str;
 		}
-	    }
-	}
-
-	private bool hideWindow;
-	///<summary>
-	/// Hide the BCI2000 window
-	///</summary>
-	private bool HideWindow {
-	    get {
-		return hideWindow;
-	    }
-	    set {
-		hideWindow = value;
-		if (Connected()) {
-		    switch (hideWindow) {
-			case false:
-			    Execute("show window");
-			    break;
-			case true:
-			    Execute("hide window");
-			    break;
-		    }
-		}
-	    }
-	}
-
-
-	~BCI2000Remote() {
-	    Disconnect();
-	}
-
-	///<summary>
-	///Disconnects from the operator. Terminated the operator if <see cref="TerminateOperatorOnDisconnect"/> is set.
-	///</summary>
-	public void Disconnect() {
-	    if (TerminateOperatorOnDisconnect && Connected()) {
-		Quit();
-	    }
-	    if (connection != null) {
-		connection.Close();
-		connection = null; //This might be redundant
-	    }
-	}
-
-	///<summary>
-	/// Starts an instance of the BCI2000 Operator on the local machine.
-	///</summary>
-	///<param name="operatorPath">The location of the operator binary</param>
-	///<param name="address"> The address on which the Operator will listen for input. Leave as default if you will only connect from the local system.
-	/// Note on security: BCI2000Remote uses an unencrypted, unsecured telnet connection. Anyone who can access the connection can run BCI2000 shell scripts. 
-	/// As such, avoid leaving BCI2000 open with its telnet port open unsupervised if it is set to an adress other than localhost (127.0.0.1),
-	/// and take caution when exposing the BCI2000 telnet interface on a port forwarded outside of your local network.
-	///</param>
-	///<param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed.</param>
-	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999) {
-	    if (port < 0 || port > 65535) {
-		throw new BCI2000ConnectionException($"Port number {port} is not valid");
-	    }
-	    IPAddress addr = IPAddress.Parse(address);
-	    connection = new TcpClient();
-	    try {
-		connection.Connect(address, port);
-		connection.Close();
-		connection = null;
-		throw new BCI2000ConnectionException($"There is already something running at {address}:{port}, is BCI2000 already running?");
-	    } catch (SocketException) {
-		//Socket should not connect if BCI2000 is not already running
-	    }
-	    connection = null;
-
-	    StringBuilder arguments = new StringBuilder();
-	    arguments.Append($" --Telnet \"{addr.ToString()}:{port}\" ");
-	    arguments.Append(" --StartupIdle ");
-	    if (!string.IsNullOrEmpty(WindowTitle)) {
-		arguments.Append($" --Title \"{WindowTitle}\" ");
-	    }
-	    if (HideWindow) {
-		arguments.Append(" --Hide ");
-	    }
-	    try {
-		System.Diagnostics.Process.Start(operatorPath, arguments.ToString());
-	    } catch (Exception ex) {
-		throw new BCI2000ConnectionException($"Could not start operator at path {operatorPath}: {ex.ToString()}");
-	    }
-	}
-
-	///<summary>
-	///Establishes a connection to an instance of BCI2000 running at the specified address and port.
-	///</summary>
-	///<param name="address">The IPv4 address to connect to. Note that this may not necessarily be the same as the one used in <see cref="StartOperator">StartOperator</see>, even if running BCI2000 locally. For example, if the operator was started on the local machine with address <c>0.0.0.0</c>, you would connect to it at address <c>127.0.0.1</c></param>
-	///<param name="port">The port on which BCI2000 is listening. If BCI2000 was started locally with <see cref="StartOperator">StartOperator</see>, this must be the same value.</param>
-	public void Connect(string address = "127.0.0.1", int port = 3999) {
-	    if (port < 0 || port > 65535) {
-		throw new BCI2000ConnectionException($"Port number {port} is not valid");
-	    }
-	    IPAddress addr = IPAddress.Parse(address);
-
-	    if (Connected()) {
-		throw new BCI2000ConnectionException("Connect() called while already connected. Call Disconnect() first.");
-	    }
-	    if (connection != null) {
-		throw new BCI2000ConnectionException("Connect called while connection is null. This should not happen and is likely a bug. Please report to the maintainer.");
-	    }
-	    connection = new TcpClient();
-	    try {
-		connection.Connect(addr, port);
-	    } catch (Exception ex) {
-		throw new BCI2000ConnectionException($"Could not connect to operator at {addr.ToString()}:{port}, {ex.ToString()}");
+		connection.Execute($"start executable {mod_name} {args_str}");
 	    }
 
-	    op_stream = connection.GetStream();
-
-	    connection.SendTimeout = Timeout;
-	    connection.ReceiveTimeout = Timeout;
-
-	    Execute("change directory $BCI2000LAUNCHDIR");
-	}
-
-	///<summary>
-	///Gets whether or not this BCI2000Remote instance is currently connected to the BCI2000 Operator
-	///</summary>
-	///<returns>Whether or not this object is currently connected to BCI2000</returns>
-	public bool Connected() {
-	    return connection?.Connected ?? false;
-	}
-
-	///<summary>
-	///Shuts down the connected BCI2000 instance
-	///</summary>
-	public void Quit() {
-	    Execute("Quit");
+	    WaitForSystemState(SystemState.Connected);
+	    remoteState = RemoteState.Connected;
 	}
 
 	///<summary>
@@ -198,6 +88,7 @@ namespace BCI2000RemoteNET {
 	    Termination,
 	    Busy
 	}
+
 	///<summary>
 	///Waits for the system to be in the specified state.
 	///This will block until the system is in the specified state.
@@ -205,105 +96,229 @@ namespace BCI2000RemoteNET {
 	///<param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
 	///<returns>True if the system state was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState state, double? timeout = null) {
-	    return Execute<bool>($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
-	}
-
-
-	///<summary>
-	///Executes the given command and returns the result as type <typeparamref name="T"/>. Throws if the response cannot be parsed as <typeparamref name="T"/>. If you are trying to execute a command which does not produce output, use <see cref="Execute(string, bool)"/>.
-	///</summary>
-	///<typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
-	///<param name="command">The command to execute</param>
-	public T Execute<T>(string command) where T : IParsable<T> {
-	    if (!Connected()) {
-		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
-	    }
-	    return GetResponseAs<T>();
+	    return connection.Execute<bool>($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
 	}
 
 	///<summary>
-	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
+	///Waits for the system to be in one of the specified states.
+	///This will block until the system is in the specified state.
 	///</summary>
-	///<param name="command">The command to send to BCI2000</param>
-	///<param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
-	public void Execute(string command, bool expectEmptyResponse = true) {
-	    if (!Connected()) {
-		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
-	    }
-	    if (expectEmptyResponse) {
-		ExpectEmptyResponse();
+	///<param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	///<returns>True if one of the states was reached within the timeout time.</returns>
+	public bool WaitForSystemState(SystemState[] states, double? timeout = null) {
+	    string states_str = string.Join('|', states.Select(state => nameof(state)).ToArray());
+	    return connection.Execute<bool>($"wait for {states_str} {timeout?.ToString() ?? ""}");
+	}
+
+	///<summary>
+	///Gets the current system state
+	///<exception cref="BCI2000CommandException">If response cannot be parsed into a valid system state</exception>
+	///</summary>
+	public SystemState GetSystemState() {
+	    string resp = connection.Execute<string>("get system state");
+	    if (Enum.TryParse(resp, out SystemState r_state)) {
+		return r_state;
 	    } else {
-		DiscardResponse();
+		throw new BCI2000CommandException("Could not parse response into state type, received response \"{resp}\"");
 	    }
 	}
 
-	//Sends command to BCI2000
-	private void SendCommand(string command){
-	    try {
-		op_stream.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
-	    } catch (Exception ex) {
-		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
+	///<summary>
+	///Sets BCI2000 config, readying it to run. Past this point no parameter changes can be made.
+	///</summary>
+	public void SetConfig() {
+	    connection.Execute("set config");
+	    WaitForSystemState(SystemState.Resting);
+	    remoteState = RemoteState.SuspendRun;
+	}
+
+	///<summary>
+	///Starts a BCI2000 run, setting config if necessary
+	///</summary>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is not in a state in which it can be immediately started or set config.</exception>
+	public void Start(){
+	    SystemState current_state = GetSystemState();
+	    if (current_state == SystemState.Running) {
+		throw new BCI2000CommandException($"Could not start BCI2000 run as BCI2000 is already running.");
 	    }
-	}
-
-	//Gets the response from the operator and attempts to parse into the given type
-	private T GetResponseAs<T>() where T : IParsable<T> {
-	    string resp = ReceiveResponse();
-	    try {
-		T result = T.Parse(resp, null);
-		return result;
-	    } catch (Exception ex) {
-		throw new BCI2000CommandException($"Could not parse response {resp} as type {nameof(T)}, {ex}");
+	    else if (current_state == SystemState.Connected) {
+		SetConfig();
+	    } else {
+		throw new BCI2000CommandException($"Could not start BCI2000 as BCI2000 is not in a valid state. BCI2000's state is currently {current_state}");
 	    }
 
+	    connection.Execute("start system");
+	    remoteState = RemoteState.SuspendRun;
 	}
 
-	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
-	private void ExpectEmptyResponse() { 
-	    string resp = ReceiveResponse();
-	    if (!string.IsNullOrWhiteSpace(resp)) {
-		throw new BCI2000CommandException($"Expected empty response but received {resp} instead");
+	///<summary> 
+	///Stops a BCI2000 run.
+	///</summary>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is not currently recording</exception>
+	public void Stop() {
+	    SystemState current_state = GetSystemState();
+	    if (current_state != SystemState.Running) {
+		throw new BCI2000CommandException($"Could not stop BCI2000 run because it is not running, BCI2000 currently in system state {current_state}");
 	    }
+	    
+	    connection.Execute("stop system");
 	}
 
-	//Receives response and discards the result.
-	private void DiscardResponse() {
-	    ReceiveResponse();
-	}
-
-	private byte[] recv_buffer = new byte[READ_BUFFER_SIZE];
-	//Receives response from the operator. Blocks until the prompt character ('>') is received.
-	private string ReceiveResponse() {
-	    StringBuilder response = new StringBuilder();
-	    while (true) {
-		int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
-		if (read > 0) { 
-		    string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
-		    if (EndsWithPrompt(resp_fragment) && !op_stream.DataAvailable) {
-			//Stop reading if previous response ended with prompt and no data is available
-			break;
-		    } else {
-			response.Append(resp_fragment);
-		    }
-		}
+	///<summary>
+	///Adds a parameter to BCI2000. Must be called before <see cref="StartupModules(Dictionary{string, List{string}})"/>.
+	///BCI2000RemoteNET provides no abstraction over BCI2000 parameters. It treats them as strings, and declares them within BCI2000 as the dynamic variant type.
+	///</summary>
+	///<param name="section">The section of the parameter. This will be the page on which the parameter appears in the BCI2000 parameters menu.</param>
+	///<param name="name">The name of the parameter.</param>
+	///<param name="defaultValue">The default value of the parameter. This argument is optional.</param>
+	///<param name="maxValue">The maximum value of the parameter. This argument is optional.</param>
+	///<param name="minValue">The minimum value of the parameter. This argument is optional.</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for adding parameters</exception>
+	public void AddParameter(string section, string name, string defaultValue = "%", string minValue = "%", string maxValue = "%") {
+	    var containsWS = ((string[])[section, name, defaultValue, minValue, maxValue]).Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
+	    if (containsWS.Count() != 0) {
+		throw new BCI2000CommandException($"Parameter definition parameters must not contain whitespace. Parameter(s) {string.Join(',', containsWS)} contain whitespace.");
 	    }
-	    return response.ToString();
+	    if (remoteState != RemoteState.Idle) {
+		throw new BCI2000CommandException("Parameters cannot be added after system has been initialized. This method must be called before SetConfig().");
+	    }
+	    connection.Execute($"add parameter {section} variant {name}= {defaultValue} {minValue} {maxValue}");
+	}
+	
+	///<summary>
+	///Loads the specified <c>.prm</c> file. If <paramref name="filename"/> is relative, it is relative to the working directory of BCI2000, which will most likely be the <c>prog</c> directory in the BCI2000 directory.
+	///Must be called before <see cref="StartupModules(Dictionary{string, List{string}})"/>.
+	///</summary>
+	///<param name="filename">Path to the parameter file to load</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for loading parameters</exception>
+	public void LoadParameters(string filename) {
+	    if (remoteState != RemoteState.Idle) {
+		throw new BCI2000CommandException("Parameters cannot be loaded after system has been initialized. This method must be called before SetConfig().");
+	    }
+	    connection.Execute($"load parameters {filename}");
 	}
 
-        private bool EndsWithPrompt(string line)
-        {
-            string lineTrim = line.ToString().Trim();
-            if (lineTrim.Length == 0) return false;
-            return lineTrim.Substring(lineTrim.Length - 1).Equals(Prompt);
-        }
+	///<summary>
+	///Sets a BCI2000 parameter. This must be called while the operator is in the Idle or Connected states.
+	///</summary>
+	///<param name="name">The name of the parameter to set</param>
+	///<param name="value">The value to set the parameter to</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for setting parameters</exception>
+	public void SetParameter(string name, string value) {
+	    if (remoteState != RemoteState.Idle && remoteState != RemoteState.Connected) {
+		SystemState current_state = GetSystemState();
+		throw new BCI2000CommandException($"Cannot set parameter, system is not in correct state. Operator must be in state Idle or Connected, but was instead in state {current_state}.");
+	    }
+	    connection.Execute($"set parameter {name} {value}");
+	}
 
-	private TcpClient connection;
-	private NetworkStream op_stream;
+	///<summary>
+	///Gets the value of a BCI2000 parameter.
+	///</summary>
+	public string GetParameter(string name) {
+	    return connection.Execute<string>($"Get parameter {name}");
+	}
 
-        private const string ReadlineTag = "\\AwaitingInput:";
-        private const string AckTag = "\\AcknowledgedInput";
-        private const string ExitCodeTag = "\\ExitCode";
-        private const string TerminationTag = "\\Terminating";
-        private const string Prompt = ">";
+	///<summary>
+	///Adds a state variable to BCI2000. State variables have a temporal resolution of one block. To log values with a higher temporal resolution, use <see cref="AddEvent"/>
+	///Must be called when BCI2000 is in the Idle system state.
+	///</summary>
+	///<param name="name"> The name of the state to be added</param>
+	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	///<param name="initialValue">The initial value of the state.</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	public void AddState(string name, int bitWidth, UInt32 initialValue = 0) {
+	    if (name.Any(Char.IsWhiteSpace)) {
+		throw new BCI2000CommandException($"Error adding state {name}, state names must not contain whitespace");
+	    }
+	    if (bitWidth > 32 || bitWidth < 1) {
+		throw new BCI2000CommandException($"Bit width of {bitWidth} for state {name} is invalid. Bit width must be between 1 and 32.");
+	    }
+	    if (remoteState != RemoteState.Idle) {
+		throw new BCI2000CommandException($"Operator must be in Idle state to add a state variable, but is in state {GetSystemState()}");
+	    }
+	    connection.Execute($"add state {name} {bitWidth} {initialValue}"); 
+	}
+
+	///<summary>
+	///Sets the specified state to the specified value 
+	///</summary>
+	///<param name="name">The name of the state to set</param>
+	///<param name="value">The value of the state to set</param>
+	public void SetState(string name, UInt32 value) {
+	    connection.Execute($"set state {name} {value}");
+	}
+
+	///<summary>
+	///Gets the value of the specified state
+	///</summary>
+	///<param name="name">The name of the state to get</param>
+	public UInt32 GetState(string name){
+	    return connection.Execute<UInt32>($"get state {name}");
+	}
+
+	///<summary>
+	///Adds an event to BCI2000. Events are similar to state variables but with a temporal resolution of one sample.
+	///Must be called when BCI2000 is in the Idle system state.
+	///</summary>
+	///<param name="name"> The name of the state to be added</param>
+	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	///<param name="initialValue">The initial value of the state.</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	public void AddEvent(string name, int bitWidth, UInt32 initialValue) {
+	    if (name.Any(Char.IsWhiteSpace)) {
+		throw new BCI2000CommandException($"Error adding event {name}, event names must not contain whitespace");
+	    }
+	    if (bitWidth > 32 || bitWidth < 1) {
+		throw new BCI2000CommandException($"Bit width of {bitWidth} for event {name} is invalid. Bit width must be between 1 and 32.");
+	    }
+	    if (remoteState != RemoteState.Idle) {
+		throw new BCI2000CommandException($"Operator must be in Idle state to add an event, but is in state {GetSystemState()}");
+	    }
+	    connection.Execute($"add event {name} {bitWidth} {initialValue}"); 
+	}
+
+	///<summary>
+	///Sets the specified event to the specified value. To set an event for a single sample duration, use <see cref="PulseEvent(string, uint)"/>
+	///</summary>
+	///<param name="name">The name of the event to set</param>
+	///<param name="value">The value of the event to set</param>
+	public void SetEvent(string name, UInt32 value) {
+	    connection.Execute($"set event {name} {value}");
+	}
+
+	///<summary>
+	///Sets the specified event to the specified value for a single sample duration. To set an event to a persistent value, use <see cref="SetEvent(string, uint)"/>
+	///</summary>
+	///<param name="name">The name of the event to pulse</param>
+	///<param name="value">The value of the event to pulse</param>
+	public void PulseEvent(string name, UInt32 value) {
+	    connection.Execute($"pulse event {name} {value}");
+	}
+
+	///<summary>
+	///Gets the value of the signal at the specified <paramref name="channel"/> and <paramref name="element"/>
+	///</summary>
+	///<param name="channel">The channel of the signal to get</param>
+	///<param name="element">The element of the signal to get</param>
+	public double GetSignal(int channel, int element) {
+	    return connection.Execute<double>($"get signal({channel},{element})");
+	}
+
+	///<summary>
+	///Gets the value of the specified event
+	///</summary>
+	///<param name="name">The name of the event to get</param>
+	public UInt32 GetEvent(string name){
+	    return connection.Execute<UInt32>($"get event {name}");
+	}
+	
+	//Subset of system states relevant to this class. Used to make sure that certain commands are valid.
+	private enum RemoteState {
+	    Idle,
+	    Connected,
+	    SuspendRun
+	}
+	private RemoteState remoteState = RemoteState.Idle;
     }
 }

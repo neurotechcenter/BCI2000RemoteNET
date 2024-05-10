@@ -1,488 +1,286 @@
-﻿///////////////////////////////////////////////////////////////////////
-// Author: tytbutler@yahoo.com
-// Description: A class for connecting to BCI2000 Remotely.
-//      See BCI2000Remote for a more in-depth description
-//
-//      Adapted from the C++ BCI2000Connection
-//
-//
-// (C) 2000-2021, BCI2000 Project
-// http://www.bci2000.org
-///////////////////////////////////////////////////////////////////////
-
+/////////////////////////////////////////////////////////////////////////////
+/// This file is a part of BCI2000RemoteNET, a library
+/// for controlling BCI2000 <http://bci2000.org> from .NET programs.
+///
+///
+///
+/// BCI20000RemoteNET is free software: you can redistribute it
+/// and/or modify it under the terms of the GNU General Public License
+/// as published by the Free Software Foundation, either version 3 of
+/// the License, or (at your option) any later version.
+///
+/// This program is distributed in the hope that it will be useful,
+/// but WITHOUT ANY WARRANTY; without even the implied warranty of
+/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+/// GNU General Public License for more details.
+/// 
+/// You should have received a copy of the GNU General Public License
+/// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+///////////////////////////////////////////////////////////////////////////
 
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
-namespace BCI2000RemoteNET
-{
-
-    /**
-     * This was adapted from a C++ library, and as such, directly transliterated the C++ programming style.
-     * This will probably change at some point, and this code will look more like actual c#.
-     * 
-     */
-    public class BCI2000Connection
-    {
-        private const int defaultTimeout = 1000;
-        private const string defaultTelnetIp = "127.0.0.1";
-        private const Int32 defaultTelnetPort = 3999;
-        private const int defaultWindowVisible = 1;
-        private const string defaultWindowTitle = "";
-        private const string defaultLogFile = "remoteLog.txt";
-        private const bool defaultLogStates = false;
-        private const bool defaultLogPrompts = false;
-
-
-        private TcpClient tcp;
-        private NetworkStream operator_stream;
-
-        //response stuff
-        private const string ReadlineTag = "\\AwaitingInput:";
-        private const string AckTag = "\\AcknowledgedInput";
-        private const string ExitCodeTag = "\\ExitCode";
-        private const string TerminationTag = "\\Terminating";
-        private const string Prompt = ">";
+namespace BCI2000RemoteNET {
+    ///<summary>
+    ///Provides basic functionality for connection and communication with the BCI2000 operator module.
+    ///</summary>
+    class BCI2000Connection {
+	//Size of the input read buffer. Should be larger than the largest possible response from BCI2000.
+	private const int READ_BUFFER_SIZE = 2048;
 
 	///<summary>
-	/// Write commands and responses to a log file
+	/// Timeout value (in milliseconds) of connection to BCI2000
 	///</summary>
-	public bool LogOutput { get; set; }
+	public int Timeout{ get; set; } = 1000;
 
-        private string logFile;
-        public string LogFile
-        {
-            get
-            {
-                return logFile;
-            }
-            set
-            {
-                logFile = value;
-                if (Log == null)
-                    return;
-                if (Log != null)
-                    Log.Close();
-            }
-        }
-        protected StreamWriter Log { get; set; }
-        
-        
-        private bool LastLogState { get; set; } //was the last thing sent a command to set state
-
-	/// <summary>
-	/// Log state send commands
+	///<summary>
+	/// Terminate operator when this object is deleted
 	/// </summary>
-        public bool LogStates { get; set; } //sets whether to log commands to set state, along with the received prompts afterwards
-	/// <summary>
-	/// Log '>' characters received from Operator shell interface
-	/// </summary>
-        public bool LogPrompts { get; set; } //sets whether to log all received prompts
+	public bool TerminateOperatorOnDisconnect { get; set; } = true;
+
+	private string windowTitle = "";
+	///<summary>
+	/// The title of the BCI2000 window
+	///</summary>
+	public string WindowTitle {
+	    get {
+		return windowTitle;
+	    }
+	    set {
+		windowTitle = value;
+		if (Connected()) {
+		    Execute($"set title \"{windowTitle}\"");
+		}
+	    }
+	}
+
+	private bool hideWindow;
+	///<summary>
+	/// Hide the BCI2000 window
+	///</summary>
+	private bool HideWindow {
+	    get {
+		return hideWindow;
+	    }
+	    set {
+		hideWindow = value;
+		if (Connected()) {
+		    switch (hideWindow) {
+			case false:
+			    Execute("show window");
+			    break;
+			case true:
+			    Execute("hide window");
+			    break;
+		    }
+		}
+	    }
+	}
 
 
-        //changes to these will only take effect on Connect()
-	/// <summary>
-	/// TCP connection timeout
-	/// </summary>
-        public int Timeout { get; set; } //send and recieve timeout in ms
-	/// <summary>
-	/// IP address of remote operator. If set, will try to connect to a runningoperator located at this IP.
-	/// Make sure to specify this address and port when starting the operator vis the <c>--telnet</c> command line argument
-	/// If not set, will start local operator given by <see cref="OperatorPath">OperatorPath</see>
-	/// </summary>
-        public string TelnetIp { get; set; }
-	/// <summary>
-	/// Port of remote operator to connect to.
-	/// </summary>
-        public Int32 TelnetPort { get; set; }
-        public string OperatorPath { get; set; }
+	~BCI2000Connection() {
+	    Disconnect();
+	}
 
+	///<summary>
+	///Disconnects from the operator. Terminated the operator if <see cref="TerminateOperatorOnDisconnect"/> is set.
+	///</summary>
+	public void Disconnect() {
+	    if (TerminateOperatorOnDisconnect && Connected()) {
+		Quit();
+	    }
+	    if (connection != null) {
+		connection.Close();
+		connection = null; //This might be redundant
+	    }
+	}
 
-        private string result; //three properties for results and logging
-        public string Result
-        {
-            get
-            {
-                return result;
-            }
+	///<summary>
+	/// Starts an instance of the BCI2000 Operator on the local machine.
+	///</summary>
+	///<param name="operatorPath">The location of the operator binary</param>
+	///<param name="address"> The address on which the Operator will listen for input. Leave as default if you will only connect from the local system.
+	/// Note on security: BCI2000Remote uses an unencrypted, unsecured telnet connection. Anyone who can access the connection can run BCI2000 shell scripts. This includes the capability to run arbitrary system shell code from the BCI2000 shell interface. 
+	/// Use extreme caution when exposing BCI2000 to the open internet, that is, setting <paramref name="address"/> to a value other than the loopback address (127.0.0.1). Do not leave a connection across machines open unattended. A secure interface is planned for a future release, until then using BCI2000 to communicate between machines on different LANs (not on the same Wi-Fi, in different buildings, etc.) is not recommended. Communication between different machines on the same LAN should be safe provided that the network router does not forward the BCI2000's host machine's BCI2000 port (by default 3999, but can be set on startup.)
+	///</param>
+	///<param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed.</param>
+	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999) {
+	    if (port < 0 || port > 65535) {
+		throw new BCI2000ConnectionException($"Port number {port} is not valid");
+	    }
+	    IPAddress addr = IPAddress.Parse(address);
+	    connection = new TcpClient();
+	    try {
+		connection.Connect(address, port);
+		connection.Close();
+		connection = null;
+		throw new BCI2000ConnectionException($"There is already something running at {address}:{port}, is BCI2000 already running?");
+	    } catch (SocketException) {
+		//Socket should not connect if BCI2000 is not already running
+	    }
+	    connection = null;
 
-            protected set
-            {
-                result = value;
-                WriteLog("Result: ", value);
-            }
-        }
-        private string sending;
-        public string Sending
-        {
-            get
-            {
-                return sending;
-            }
-            set
-            {
-                sending = value;
-                if (value.IndexOf("set state", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    LastLogState = true;
-                    if (!LogStates)// if logging states is disabled
-                        return;
-                }
-                WriteLog("Sent: ", value);
-            }
-        }
-        private string received;
-        public string Received
-        {
-            get
-            {
-                return received;
-            }
-            private set
-            {
-                received = value;
+	    StringBuilder arguments = new StringBuilder();
+	    arguments.Append($" --Telnet \"{addr.ToString()}:{port}\" ");
+	    arguments.Append(" --StartupIdle ");
+	    if (!string.IsNullOrEmpty(WindowTitle)) {
+		arguments.Append($" --Title \"{WindowTitle}\" ");
+	    }
+	    if (HideWindow) {
+		arguments.Append(" --Hide ");
+	    }
+	    try {
+		System.Diagnostics.Process.Start(operatorPath, arguments.ToString());
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Could not start operator at path {operatorPath}: {ex.ToString()}");
+	    }
+	}
 
-                if (value.IndexOf(Prompt) == 0)
-                {
-                    if (LastLogState)
-                    {
-                        LastLogState = false;
-                        if (!LogStates) //don't log prompts as received from 'set state'
-                        {
-                            return;
-                        }
-                    }
-                    if (!LogPrompts) //don't log prompts
-                        return;
-                }
-                WriteLog("Received: ", value);
-            }
-        }
-        public string Response { get; protected set; }
+	///<summary>
+	///Establishes a connection to an instance of BCI2000 running at the specified address and port.
+	///</summary>
+	///<param name="address">The IPv4 address to connect to. Note that this may not necessarily be the same as the one used in <see cref="StartOperator">StartOperator</see>, even if running BCI2000 locally. For example, if the operator was started on the local machine with address <c>0.0.0.0</c>, you would connect to it at address <c>127.0.0.1</c></param>
+	///<param name="port">The port on which BCI2000 is listening. If BCI2000 was started locally with <see cref="StartOperator">StartOperator</see>, this must be the same value.</param>
+	public void Connect(string address = "127.0.0.1", int port = 3999) {
+	    if (port < 0 || port > 65535) {
+		throw new BCI2000ConnectionException($"Port number {port} is not valid");
+	    }
+	    IPAddress addr = IPAddress.Parse(address);
 
-        //result is set by methods in this class, response is the response from BCI2000, as Execute() shouldn't overwrite Result
-        private bool TerminateOperator { get; set; }
+	    if (Connected()) {
+		throw new BCI2000ConnectionException("Connect() called while already connected. Call Disconnect() first.");
+	    }
+	    if (connection != null) {
+		throw new BCI2000ConnectionException("Connect called while connection is null. This should not happen and is likely a bug. Please report to the maintainer.");
+	    }
+	    connection = new TcpClient();
+	    try {
+		connection.Connect(addr, port);
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Could not connect to operator at {addr.ToString()}:{port}, {ex.ToString()}");
+	    }
 
-        //Changes to these will result in a call to the Operator if connected
-        private string windowTitle;
-        public string WindowTitle
-        {
-            get
-            {
-                return windowTitle;
-            }
+	    op_stream = connection.GetStream();
 
-            set
-            {
-                windowTitle = value;
-                if (Connected())
-                    Execute("set title \"" + value + "\"");
-            }
-        }
-        private int windowVisible;
-        public int WindowVisible
-        {
-            get
-            {
-                return windowVisible;
-            }
-            set
-            {
-                windowVisible = value;
-                if (Connected())
-                {
-                    if (value == 0)
-                        Execute("hide window");
-                    if (value == 1)
-                        Execute("show window");
-                }
-            }
-        }
+	    connection.SendTimeout = Timeout;
+	    connection.ReceiveTimeout = Timeout;
 
+	    Execute("change directory $BCI2000LAUNCHDIR");
+	}
 
-        public BCI2000Connection()
-        {
-            Timeout = defaultTimeout;
-            TelnetIp = defaultTelnetIp;
-            TelnetPort = defaultTelnetPort;
-            WindowVisible = defaultWindowVisible;
-            WindowTitle = defaultWindowTitle;
-            LogFile = defaultLogFile;
-            LogStates = defaultLogStates;
-            LogPrompts = defaultLogPrompts;
-        }
+	///<summary>
+	///Gets whether or not this BCI2000Remote instance is currently connected to the BCI2000 Operator
+	///</summary>
+	///<returns>Whether or not this object is currently connected to BCI2000</returns>
+	public bool Connected() {
+	    return connection?.Connected ?? false;
+	}
 
-        ~BCI2000Connection()
-        {
-            Log.Close();
-        }
+	///<summary>
+	///Shuts down the connected BCI2000 instance
+	///</summary>
+	public void Quit() {
+	    Execute("Quit");
+	}
 
+	///<summary>
+	///Executes the given command and returns the result as type <typeparamref name="T"/>. Throws if the response cannot be parsed as <typeparamref name="T"/>. If you are trying to execute a command which does not produce output, use <see cref="Execute(string, bool)"/>.
+	///</summary>
+	///<typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
+	///<param name="command">The command to execute</param>
+	public T Execute<T>(string command) where T : IParsable<T> {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAs<T>();
+	}
 
-        //Ends connection to operator, terminates operator if it was started by a previous Connect() call
-        public bool Disconnect()
-        {
-            Result = "";
-            if (TerminateOperator)
-            {
-                TerminateOperator = false;
-                if (Connected())
-                    Quit();
-            }
-            if (tcp != null)
-                tcp.Close();
-            return true;
-        }
+	///<summary>
+	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
+	///</summary>
+	///<param name="command">The command to send to BCI2000</param>
+	///<param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
+	public void Execute(string command, bool expectEmptyResponse = true) {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    if (expectEmptyResponse) {
+		ExpectEmptyResponse();
+	    } else {
+		DiscardResponse();
+	    }
+	}
 
-        public virtual bool Connect() //Connects to operator module, starts operator if not running
-        {
-            
-            if (String.IsNullOrEmpty(TelnetIp))
-                TelnetIp = defaultTelnetIp;
-            if (TelnetPort == 0)
-                TelnetPort = defaultTelnetPort;
+	//Sends command to BCI2000
+	private void SendCommand(string command){
+	    try {
+		op_stream.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
+	    }
+	}
 
+	//Gets the response from the operator and attempts to parse into the given type
+	private T GetResponseAs<T>() where T : IParsable<T> {
+	    string resp = ReceiveResponse();
+	    try {
+		T result = T.Parse(resp, null);
+		return result;
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response {resp} as type {nameof(T)}, {ex}");
+	    }
 
-            tcp = new TcpClient();
-            bool success = true;
-            try
-            {
-                tcp.Connect(TelnetIp, TelnetPort);
-            }
-            catch (SocketException ex)
-            {
-                success = false;
-            }
+	}
 
-            if (!success && (String.IsNullOrEmpty(OperatorPath)))
-            {
-                throw new BCI2000ConnectionException("Failed to connect to " + TelnetIp + ":" + TelnetPort);
-                return false;
-            }
+	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
+	private void ExpectEmptyResponse() { 
+	    string resp = ReceiveResponse();
+	    if (!string.IsNullOrWhiteSpace(resp)) {
+		throw new BCI2000CommandException($"Expected empty response but received {resp} instead");
+	    }
+	}
 
+	//Receives response and discards the result.
+	private void DiscardResponse() {
+	    ReceiveResponse();
+	}
 
-            if (!success) //tcp has not connected to running operator, so it will try to open a new operator and connect
-            {
-                tcp.Close();
-                tcp = new TcpClient();
+	private byte[] recv_buffer = new byte[READ_BUFFER_SIZE];
+	//Receives response from the operator. Blocks until the prompt character ('>') is received.
+	private string ReceiveResponse() {
+	    StringBuilder response = new StringBuilder();
+	    while (true) {
+		int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
+		if (read > 0) { 
+		    string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
+		    if (EndsWithPrompt(resp_fragment) && !op_stream.DataAvailable) {
+			//Stop reading if previous response ended with prompt and no data is available
+			break;
+		    } else {
+			response.Append(resp_fragment);
+		    }
+		}
+	    }
+	    return response.ToString();
+	}
 
-                try //run operator, must be local
-                {
-                    StringBuilder arguments = new StringBuilder();
-                    arguments.Append("--Telnet \"127.0.0.1" + ':' + TelnetPort.ToString() + "\" ");
-                    arguments.Append("--StartupIdle ");
-                    if (WindowTitle != "" && WindowTitle != null)
-                        arguments.Append("--Title \"" + WindowTitle + "\" ");
-                    if (WindowVisible != 1)
-                        arguments.Append("--Hide ");
-
-                    System.Diagnostics.Process.Start(OperatorPath, arguments.ToString());
-                }
-                catch (InvalidOperationException ex)
-                {
-                    throw ex;
-                    Result = "Failed to run operator at " + OperatorPath;
-                    return false;
-                }
-                try//connect to started operator
-                {
-                    tcp.Connect("127.0.0.1", TelnetPort);
-                }
-                catch (SocketException ex)
-                {
-                    Result = "Failed to connect to operator at 127.0.0.1:" + TelnetPort + ", " + ex.Message;
-                    throw ex;
-                    return false;
-                }
-
-                TerminateOperator = true;
-            }
-
-            operator_stream = new NetworkStream(tcp.Client);
-
-            tcp.SendTimeout = Timeout;
-            tcp.ReceiveTimeout = Timeout;
-
-            Execute("change directory $BCI2000LAUNCHDIR");
-
-            WindowTitle = windowTitle;
-            WindowVisible = windowVisible;
-
-            return true;
-        }
-        public void WaitForConnected()
-        {
-            Execute("Wait for Connected");
-        }
-        public bool Execute(string command)
-        {
-            int unused = 0;
-            return Execute(command, ref unused);
-        }
-        public bool Execute(string command, ref int outCode)
-        {
-            Result = "";
-            if (!Connected())
-            {
-                Result = "Not connected, call BCI2000Connection.Connect() to connect.";
-                return false;
-            }
-
-            Sending = command;
-            try
-            {
-                tcp.Client.Send(stringToBytes(command + "\r\n"));
-            }
-            catch (SocketException ex)
-            {
-                Result = "SocketException: " + ex + ", socket error code " + ex.SocketErrorCode;
-                throw ex;
-                return false;
-            }
-           
-            return ProcessResponse(ref outCode);
-        }
-
-
-        private bool endsWithPrompt(StringBuilder line)
+        private bool EndsWithPrompt(string line)
         {
             string lineTrim = line.ToString().Trim();
             if (lineTrim.Length == 0) return false;
             return lineTrim.Substring(lineTrim.Length - 1).Equals(Prompt);
         }
 
-        /// <summary>
-        /// Processes the response from BCI2000. Response will be set to the last line of received data that is not a prompt character.
-        /// </summary>
-        /// <param name="outCode"></param>
-        /// <returns></returns>
-        /// <exception cref="BCI2000ConnectionException"></exception>
-        public bool ProcessResponse(ref int outCode)
-        {
-            Response = "";
-            byte[] buffer = new byte[1024];
-            StringBuilder line = new StringBuilder("", 100);
-            while (Connected() && (!endsWithPrompt(line)
-                || operator_stream.DataAvailable)) //break loop only if no more data to read and last character received was prompt.
-                {
+	private TcpClient connection;
+	private NetworkStream op_stream;
 
-                char c = operator_stream.DataAvailable ? (char) operator_stream.ReadByte() : (char) 0x0; // if waiting for prompt, add nothing to data stream.
-                if (c == '\n' || c == -1) // -1 means all data has been read
-                {
-                    string responseUnprocessed = line.ToString();
-                    if (responseUnprocessed.Contains(ReadlineTag))
-                    {
-                        string input = "";
-                        if (OnInput())
-                        {
-                            tcp.Client.Send(stringToBytes(input + "\r\n"));
-                            Byte[] recvBuf = new byte[1024];
-                            tcp.Client.Receive(recvBuf);
-                            if (!bytesToString(recvBuf).Contains(AckTag))
-                            {
-                                throw new BCI2000ConnectionException("Did not receive input acknowledgement");
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            throw new BCI2000ConnectionException("Could not handle request for input: Override BCI2000Connection.OnInput to handle input");
-                            return false;
-                        }
-                    }
-                    else if (responseUnprocessed.Contains(ExitCodeTag))
-                    {
-                        outCode = responseUnprocessed.Length;
-                    }
-                    else if (responseUnprocessed.Contains(TerminationTag))
-                    {
-                        tcp.Client.Close();
-                        tcp.Close();
-                        TerminateOperator = false;
-                        return true;
-                    }
-                    else
-                    {
-                        if (!OnOutput(responseUnprocessed))
-                        {
-                            Response = responseUnprocessed;
-                        }
-                        if (responseUnprocessed.IndexOf("true", StringComparison.OrdinalIgnoreCase) >= 0)//this is rewritten from the original code, but changed so that 1 reflects true and 0 reflects false
-                            outCode = 1;
-                        else if (responseUnprocessed.IndexOf("false", StringComparison.OrdinalIgnoreCase) >= 0)
-                            outCode = 0;
-                        else if (String.IsNullOrWhiteSpace(responseUnprocessed))
-                            outCode = 1;
-                        else
-                            outCode = -1;
-                    }
-                    line.Clear();
-                }
-                if (c != '\r' && c != 0x0)
-                {
-                    line.Append(c);
-                }
-            }
-            if (!Connected())
-            {
-                throw new BCI2000ConnectionException("Lost Connection to BCI2000");
-            }
-            return true;
-        }
-
-        public bool Connected()
-        {
-            if (tcp != null)
-                return tcp.Connected;
-            else
-                return false;
-        }
-
-        public bool Quit()
-        {
-            Execute("quit");
-            return String.IsNullOrWhiteSpace(Response);
-        }
-
-        public virtual bool OnInput()//input and output handler methods to be overridden
-        {
-            return false;
-        }
-        public virtual bool OnOutput(string output)
-        {
-            return false;
-        }
-
-
-        public void WriteLog(string toLog)//for writing to log from outside the class
-        {
-            WriteLog("External: ", toLog);
-        }
-        private void WriteLog(string logPreface, string toLog)
-        {
-	    if (LogOutput) {
-		if (Log == null)
-		    Log = new StreamWriter(LogFile);
-		if (Log != null && !String.IsNullOrWhiteSpace(toLog))
-		{
-		    Log.WriteLine(DateTime.Now.ToString("HH:mm:ss:fff") + ' ' + logPreface + ' ' + toLog);
-		    Log.Flush();
-		}
-	    }
-        }
-
-
-        private Byte[] stringToBytes(string str)//utility methods
-        {
-            return System.Text.Encoding.ASCII.GetBytes(str);
-        }
-        private string bytesToString(Byte[] bytes)
-        {
-            return System.Text.Encoding.ASCII.GetString(bytes).Replace("\0", String.Empty);
-        }
-
-
+        private const string ReadlineTag = "\\AwaitingInput:";
+        private const string AckTag = "\\AcknowledgedInput";
+        private const string ExitCodeTag = "\\ExitCode";
+        private const string TerminationTag = "\\Terminating";
+        private const string Prompt = ">";
     }
 }
