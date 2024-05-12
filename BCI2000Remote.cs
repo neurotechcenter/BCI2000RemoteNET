@@ -26,7 +26,7 @@ using System.Linq;
 namespace BCI2000RemoteNET {
     ///<summary>
     ///Provides functionality for control of BCI2000.
-    class BCI2000Remote {
+    public class BCI2000Remote {
 	///<summary>
 	///The <see cref="BCI2000Connection"/> which handles connection with BCI2000
 	///Note: It is defined as readonly because I can see no possible case in which it would be useful to swap connections in a BCI2000Remote object, especially as BCI2000Remote holds no state.

@@ -27,7 +27,7 @@ namespace BCI2000RemoteNET {
     ///<summary>
     ///Provides basic functionality for connection and communication with the BCI2000 operator module.
     ///</summary>
-    class BCI2000Connection {
+    public class BCI2000Connection {
 	//Size of the input read buffer. Should be larger than the largest possible response from BCI2000.
 	private const int READ_BUFFER_SIZE = 2048;
 
