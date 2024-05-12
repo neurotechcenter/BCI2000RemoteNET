@@ -186,17 +186,54 @@ namespace BCI2000RemoteNET {
 	    Execute("Quit");
 	}
 
+		[Obsolete("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.", true)]
+	public T Execute<T> ()
+		{
+			throw new NotImplementedException("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.");
+		}
 	///<summary>
-	///Executes the given command and returns the result as type <typeparamref name="T"/>. Throws if the response cannot be parsed as <typeparamref name="T"/>. If you are trying to execute a command which does not produce output, use <see cref="Execute(string, bool)"/>.
+	///Executes the given command and returns the result.
 	///</summary>
-	///<typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
 	///<param name="command">The command to execute</param>
-	public T Execute<T>(string command) where T : IParsable<T> {
+	public string ExecuteString(string command) {
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
-	    return GetResponseAs<T>();
+	    return ReceiveResponse();
 	}
+	///<summary>
+	///Executees the command and returns the result parsed as UInt32
+	///</summary>
+	///<param name="command">The command to execute</param>
+	public UInt32 ExecuteUInt32(string command) {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsUInt();
+	}
+
+	///<summary>
+	///Executees the command and returns the result parsed as double
+	///</summary>
+	///<param name="command">The command to execute</param>
+	public double ExecuteDouble(string command) {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsDouble();
+	}
+
+	///<summary>
+	///Executees the command and returns the result parsed as bool
+	///</summary>
+	///<param name="command">The command to execute</param>
+	public bool ExecuteBool(string command) {
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsBool();
+	}
+
 
 	///<summary>
 	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
@@ -223,17 +260,39 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
-	//Gets the response from the operator and attempts to parse into the given type
-	private T GetResponseAs<T>() where T : IParsable<T> {
+    //Gets response and parses to UInt32
+	private UInt32 GetResponseAsUInt() {
 	    string resp = ReceiveResponse();
 	    try {
-		T result = T.Parse(resp, null);
+		UInt32 result = UInt32.Parse(resp, null);
 		return result;
 	    } catch (Exception ex) {
-		throw new BCI2000CommandException($"Could not parse response {resp} as type {nameof(T)}, {ex}");
+		throw new BCI2000CommandException($"Could not parse response {resp} as type UInt32, {ex}");
 	    }
 
 	}
+
+    //Gets response and parses to UInt32
+	private double GetResponseAsDouble() {
+	    string resp = ReceiveResponse();
+	    try {
+		double result = double.Parse(resp, null);
+		return result;
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response {resp} as type Double, {ex}");
+	    }
+	}
+    //Gets response and parses to bool
+	private bool GetResponseAsBool() {
+	    string resp = ReceiveResponse();
+	    try {
+		bool result = Boolean.Parse(resp);
+		return result;
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response {resp} as type bool, {ex}");
+	    }
+	}
+
 
 	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
 	private void ExpectEmptyResponse() { 

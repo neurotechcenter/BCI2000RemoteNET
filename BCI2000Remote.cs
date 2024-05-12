@@ -96,7 +96,7 @@ namespace BCI2000RemoteNET {
 	///<param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
 	///<returns>True if the system state was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState state, double? timeout = null) {
-	    return connection.Execute<bool>($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
+	    return connection.ExecuteBool($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
 	}
 
 	///<summary>
@@ -107,7 +107,7 @@ namespace BCI2000RemoteNET {
 	///<returns>True if one of the states was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState[] states, double? timeout = null) {
 	    string states_str = string.Join('|', states.Select(state => nameof(state)).ToArray());
-	    return connection.Execute<bool>($"wait for {states_str} {timeout?.ToString() ?? ""}");
+	    return connection.ExecuteBool($"wait for {states_str} {timeout?.ToString() ?? ""}");
 	}
 
 	///<summary>
@@ -115,7 +115,7 @@ namespace BCI2000RemoteNET {
 	///<exception cref="BCI2000CommandException">If response cannot be parsed into a valid system state</exception>
 	///</summary>
 	public SystemState GetSystemState() {
-	    string resp = connection.Execute<string>("get system state");
+	    string resp = connection.ExecuteString("get system state");
 	    if (Enum.TryParse(resp, out SystemState r_state)) {
 		return r_state;
 	    } else {
@@ -175,7 +175,8 @@ namespace BCI2000RemoteNET {
 	///<param name="minValue">The minimum value of the parameter. This argument is optional.</param>
 	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for adding parameters</exception>
 	public void AddParameter(string section, string name, string defaultValue = "%", string minValue = "%", string maxValue = "%") {
-	    var containsWS = ((string[])[section, name, defaultValue, minValue, maxValue]).Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
+		var pack = new string[] {section, name, defaultValue, minValue, maxValue};
+	    var containsWS = pack.Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
 	    if (containsWS.Count() != 0) {
 		throw new BCI2000CommandException($"Parameter definition parameters must not contain whitespace. Parameter(s) {string.Join(',', containsWS)} contain whitespace.");
 	    }
@@ -216,7 +217,7 @@ namespace BCI2000RemoteNET {
 	///Gets the value of a BCI2000 parameter.
 	///</summary>
 	public string GetParameter(string name) {
-	    return connection.Execute<string>($"Get parameter {name}");
+	    return connection.ExecuteString($"Get parameter {name}");
 	}
 
 	///<summary>
@@ -258,7 +259,7 @@ namespace BCI2000RemoteNET {
 	///</summary>
 	///<param name="name">The name of the state to get</param>
 	public UInt32 GetState(string name){
-	    return connection.Execute<UInt32>($"get state {name}");
+	    return connection.ExecuteUInt32($"get state {name}");
 	}
 
 	///<summary>
@@ -310,7 +311,7 @@ namespace BCI2000RemoteNET {
 	///<param name="channel">The channel of the signal to get</param>
 	///<param name="element">The element of the signal to get</param>
 	public double GetSignal(int channel, int element) {
-	    return connection.Execute<double>($"get signal({channel},{element})");
+	    return connection.ExecuteDouble($"get signal({channel},{element})");
 	}
 
 	///<summary>
@@ -318,7 +319,7 @@ namespace BCI2000RemoteNET {
 	///</summary>
 	///<param name="name">The name of the event to get</param>
 	public UInt32 GetEvent(string name){
-	    return connection.Execute<UInt32>($"get event {name}");
+	    return connection.ExecuteUInt32($"get event {name}");
 	}
 	
 	//Subset of system states relevant to this class. Used to make sure that certain commands are valid.
