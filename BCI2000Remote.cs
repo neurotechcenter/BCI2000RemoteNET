@@ -47,6 +47,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional.</param>
 	public void StartupModules(Dictionary<string, List<string>> modules) {
+		connection.Execute("startup system");
 	    foreach((string mod_name, List<string> mod_args) in modules) {
 		//Format arguments to start with --
 		var args_p = mod_args.Select(arg => {
@@ -81,6 +82,7 @@ namespace BCI2000RemoteNET {
 	public enum SystemState {
 	    Idle,
 	    Startup,
+		Initialization,
 	    Connected,
 	    Resting,
 	    Suspended,
@@ -142,7 +144,7 @@ namespace BCI2000RemoteNET {
 	    if (current_state == SystemState.Running) {
 		throw new BCI2000CommandException($"Could not start BCI2000 run as BCI2000 is already running.");
 	    }
-	    else if (current_state == SystemState.Connected) {
+	    else if (current_state == SystemState.Initialization || current_state == SystemState.Connected) {
 		SetConfig();
 	    } else {
 		throw new BCI2000CommandException($"Could not start BCI2000 as BCI2000 is not in a valid state. BCI2000's state is currently {current_state}");
@@ -223,13 +225,12 @@ namespace BCI2000RemoteNET {
 	/// <summary>
 	///Adds a state variable to BCI2000. State variables have a temporal resolution of one block. To log values with a higher temporal resolution, use <see cref="AddEvent"/>
 	///Must be called when BCI2000 is in the Idle system state.
-	/// </summary>
-	/// <param name="name"> The name of the state to be added</param>
-	/// <param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
-	/// <param name="initialValue">The initial value of the state.</param>
-	/// <param name="visualize">Track the value of the state within the BCI2000 visualization window</param>
-	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
-	public void AddState(string name, int bitWidth, UInt32 initialValue = 0, bool visualize = false) {
+	///</summary>
+	///<param name="name"> The name of the state to be added</param>
+	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	///<param name="initialValue">The initial value of the state.</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	public void AddState(string name, int bitWidth, UInt32 initialValue = 0) {
 	    if (name.Any(Char.IsWhiteSpace)) {
 		throw new BCI2000CommandException($"Error adding state {name}, state names must not contain whitespace");
 	    }
@@ -240,9 +241,6 @@ namespace BCI2000RemoteNET {
 		throw new BCI2000CommandException($"Operator must be in Idle state to add a state variable, but is in state {GetSystemState()}");
 	    }
 	    connection.Execute($"add state {name} {bitWidth} {initialValue}"); 
-	    if (visualize) {
-		connection.Execute($"visualize watch {name}");
-	    }
 	}
 
 	/// <summary>
@@ -281,7 +279,7 @@ namespace BCI2000RemoteNET {
 	    if (remoteState != RemoteState.Idle) {
 		throw new BCI2000CommandException($"Operator must be in Idle state to add an event, but is in state {GetSystemState()}");
 	    }
-	    connection.Execute($"add event {name} {bitWidth} {initialValue}"); 
+	    connection.Execute($"add event {name} {bitWidth} {initialValue}");
 	    if (visualize) {
 		connection.Execute($"visualize watch {name}");
 	    }
@@ -321,6 +319,19 @@ namespace BCI2000RemoteNET {
 	public UInt32 GetEvent(string name){
 	    return connection.Execute<UInt32>($"get event {name}");
 	}
+
+	/// <summary>
+	/// Visualizes a BCI2000 value, for example, an event.
+	/// </summary>
+	/// <param name="value">The expression to visualize. For example, if you wish to visualize an event called `event` pass in the value `"event"`</param>
+	public void Visualize(string value)
+		{
+			if (remoteState == RemoteState.Idle)
+			{
+				throw new BCI2000CommandException("Cannot visualize value during before initialization. Call this method after StartupModules()");
+			}
+			connection.Execute($"visualize watch {value}");
+		}
 	
 	//Subset of system states relevant to this class. Used to make sure that certain commands are valid.
 	private enum RemoteState {
