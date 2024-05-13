@@ -24,27 +24,28 @@ using System.Text;
 using System.Linq;
 
 namespace BCI2000RemoteNET {
-    ///<summary>
+    /// <summary>
     ///Provides functionality for control of BCI2000.
+    /// </summary>
     public class BCI2000Remote {
-	///<summary>
-	///The <see cref="BCI2000Connection"/> which handles connection with BCI2000
+	/// <summary>
+	/// The <see cref="BCI2000Connection"/> which handles connection with BCI2000
 	///Note: It is defined as readonly because I can see no possible case in which it would be useful to swap connections in a BCI2000Remote object, especially as BCI2000Remote holds no state.
-	///</summary>
+	/// </summary>
 	public readonly BCI2000Connection connection;
 
-	///<summary>
+	/// <summary>
 	///Constructor for <see cref="BCI2000Remote"/>
-	///</summary>
-	///<param name="connection">Connection object which is connected to a BCI2000 instance. Can be set to connect after this object is constructed as long as no methods of this class which require communication with BCI2000 are called beforehand</param
+	/// </summary>
+	/// <param name="connection">Connection object which is connected to a BCI2000 instance. Can be set to connect after this object is constructed as long as no methods of this class which require communication with BCI2000 are called beforehand</param
 	public BCI2000Remote(BCI2000Connection connection) {
 	    this.connection = connection;
 	}
 
-	///<summary>
+	/// <summary>
 	/// Starts up the specified BCI2000 modules. 
-	///</summary>
-	///<param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional.</param>
+	/// </summary>
+	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional.</param>
 	public void StartupModules(Dictionary<string, List<string>> modules) {
 	    foreach((string mod_name, List<string> mod_args) in modules) {
 		//Format arguments to start with --
@@ -74,7 +75,7 @@ namespace BCI2000RemoteNET {
 	    remoteState = RemoteState.Connected;
 	}
 
-	///<summary>
+	/// <summary>
 	/// BCI2000 Operator states of operation, as documented on the <anchor xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bci2000.org/mediawiki/index.php/User_Reference:Operator_Module_Scripting#WAIT_FOR_%3Csystem_state%3E_[%3Ctimeout_seconds%3E]">BCI2000 Wiki</anchor>
 	/// </summary>
 	public enum SystemState {
@@ -89,31 +90,31 @@ namespace BCI2000RemoteNET {
 	    Busy
 	}
 
-	///<summary>
+	/// <summary>
 	///Waits for the system to be in the specified state.
 	///This will block until the system is in the specified state.
-	///</summary>
-	///<param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
-	///<returns>True if the system state was reached within the timeout time.</returns>
+	/// </summary>
+	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	/// <returns>True if the system state was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState state, double? timeout = null) {
 	    return connection.Execute<bool>($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Waits for the system to be in one of the specified states.
 	///This will block until the system is in the specified state.
-	///</summary>
-	///<param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
-	///<returns>True if one of the states was reached within the timeout time.</returns>
+	/// </summary>
+	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	/// <returns>True if one of the states was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState[] states, double? timeout = null) {
 	    string states_str = string.Join('|', states.Select(state => nameof(state)).ToArray());
 	    return connection.Execute<bool>($"wait for {states_str} {timeout?.ToString() ?? ""}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Gets the current system state
-	///<exception cref="BCI2000CommandException">If response cannot be parsed into a valid system state</exception>
-	///</summary>
+	/// <exception cref="BCI2000CommandException">If response cannot be parsed into a valid system state</exception>
+	/// </summary>
 	public SystemState GetSystemState() {
 	    string resp = connection.Execute<string>("get system state");
 	    if (Enum.TryParse(resp, out SystemState r_state)) {
@@ -123,19 +124,19 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
-	///<summary>
+	/// <summary>
 	///Sets BCI2000 config, readying it to run. Past this point no parameter changes can be made.
-	///</summary>
+	/// </summary>
 	public void SetConfig() {
 	    connection.Execute("set config");
 	    WaitForSystemState(SystemState.Resting);
 	    remoteState = RemoteState.SuspendRun;
 	}
 
-	///<summary>
+	/// <summary>
 	///Starts a BCI2000 run, setting config if necessary
-	///</summary>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is not in a state in which it can be immediately started or set config.</exception>
+	/// </summary>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is not in a state in which it can be immediately started or set config.</exception>
 	public void Start(){
 	    SystemState current_state = GetSystemState();
 	    if (current_state == SystemState.Running) {
@@ -151,10 +152,10 @@ namespace BCI2000RemoteNET {
 	    remoteState = RemoteState.SuspendRun;
 	}
 
-	///<summary> 
+	/// <summary> 
 	///Stops a BCI2000 run.
-	///</summary>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is not currently recording</exception>
+	/// </summary>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is not currently recording</exception>
 	public void Stop() {
 	    SystemState current_state = GetSystemState();
 	    if (current_state != SystemState.Running) {
@@ -164,16 +165,16 @@ namespace BCI2000RemoteNET {
 	    connection.Execute("stop system");
 	}
 
-	///<summary>
+	/// <summary>
 	///Adds a parameter to BCI2000. Must be called before <see cref="StartupModules(Dictionary{string, List{string}})"/>.
 	///BCI2000RemoteNET provides no abstraction over BCI2000 parameters. It treats them as strings, and declares them within BCI2000 as the dynamic variant type.
-	///</summary>
-	///<param name="section">The section of the parameter. This will be the page on which the parameter appears in the BCI2000 parameters menu.</param>
-	///<param name="name">The name of the parameter.</param>
-	///<param name="defaultValue">The default value of the parameter. This argument is optional.</param>
-	///<param name="maxValue">The maximum value of the parameter. This argument is optional.</param>
-	///<param name="minValue">The minimum value of the parameter. This argument is optional.</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for adding parameters</exception>
+	/// </summary>
+	/// <param name="section">The section of the parameter. This will be the page on which the parameter appears in the BCI2000 parameters menu.</param>
+	/// <param name="name">The name of the parameter.</param>
+	/// <param name="defaultValue">The default value of the parameter. This argument is optional.</param>
+	/// <param name="maxValue">The maximum value of the parameter. This argument is optional.</param>
+	/// <param name="minValue">The minimum value of the parameter. This argument is optional.</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for adding parameters</exception>
 	public void AddParameter(string section, string name, string defaultValue = "%", string minValue = "%", string maxValue = "%") {
 	    var containsWS = ((string[])[section, name, defaultValue, minValue, maxValue]).Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
 	    if (containsWS.Count() != 0) {
@@ -185,12 +186,12 @@ namespace BCI2000RemoteNET {
 	    connection.Execute($"add parameter {section} variant {name}= {defaultValue} {minValue} {maxValue}");
 	}
 	
-	///<summary>
+	/// <summary>
 	///Loads the specified <c>.prm</c> file. If <paramref name="filename"/> is relative, it is relative to the working directory of BCI2000, which will most likely be the <c>prog</c> directory in the BCI2000 directory.
 	///Must be called before <see cref="StartupModules(Dictionary{string, List{string}})"/>.
-	///</summary>
-	///<param name="filename">Path to the parameter file to load</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for loading parameters</exception>
+	/// </summary>
+	/// <param name="filename">Path to the parameter file to load</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for loading parameters</exception>
 	public void LoadParameters(string filename) {
 	    if (remoteState != RemoteState.Idle) {
 		throw new BCI2000CommandException("Parameters cannot be loaded after system has been initialized. This method must be called before SetConfig().");
@@ -198,12 +199,12 @@ namespace BCI2000RemoteNET {
 	    connection.Execute($"load parameters {filename}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Sets a BCI2000 parameter. This must be called while the operator is in the Idle or Connected states.
-	///</summary>
-	///<param name="name">The name of the parameter to set</param>
-	///<param name="value">The value to set the parameter to</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for setting parameters</exception>
+	/// </summary>
+	/// <param name="name">The name of the parameter to set</param>
+	/// <param name="value">The value to set the parameter to</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for setting parameters</exception>
 	public void SetParameter(string name, string value) {
 	    if (remoteState != RemoteState.Idle && remoteState != RemoteState.Connected) {
 		SystemState current_state = GetSystemState();
@@ -212,22 +213,22 @@ namespace BCI2000RemoteNET {
 	    connection.Execute($"set parameter {name} {value}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Gets the value of a BCI2000 parameter.
-	///</summary>
+	/// </summary>
 	public string GetParameter(string name) {
 	    return connection.Execute<string>($"Get parameter {name}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Adds a state variable to BCI2000. State variables have a temporal resolution of one block. To log values with a higher temporal resolution, use <see cref="AddEvent"/>
 	///Must be called when BCI2000 is in the Idle system state.
-	///</summary>
-	///<param name="name"> The name of the state to be added</param>
-	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
-	///<param name="initialValue">The initial value of the state.</param>
-	///<param name="visualize">Track the value of the state within the BCI2000 visualization window</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	/// </summary>
+	/// <param name="name"> The name of the state to be added</param>
+	/// <param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	/// <param name="initialValue">The initial value of the state.</param>
+	/// <param name="visualize">Track the value of the state within the BCI2000 visualization window</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
 	public void AddState(string name, int bitWidth, UInt32 initialValue = 0, bool visualize = false) {
 	    if (name.Any(Char.IsWhiteSpace)) {
 		throw new BCI2000CommandException($"Error adding state {name}, state names must not contain whitespace");
@@ -244,32 +245,32 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
-	///<summary>
+	/// <summary>
 	///Sets the specified state to the specified value 
-	///</summary>
-	///<param name="name">The name of the state to set</param>
-	///<param name="value">The value of the state to set</param>
+	/// </summary>
+	/// <param name="name">The name of the state to set</param>
+	/// <param name="value">The value of the state to set</param>
 	public void SetState(string name, UInt32 value) {
 	    connection.Execute($"set state {name} {value}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Gets the value of the specified state
-	///</summary>
-	///<param name="name">The name of the state to get</param>
+	/// </summary>
+	/// <param name="name">The name of the state to get</param>
 	public UInt32 GetState(string name){
 	    return connection.Execute<UInt32>($"get state {name}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Adds an event to BCI2000. Events are similar to state variables but with a temporal resolution of one sample.
 	///Must be called when BCI2000 is in the Idle system state.
-	///</summary>
-	///<param name="name"> The name of the state to be added</param>
-	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
-	///<param name="initialValue">The initial value of the state.</param>
-	///<param name="visualize">Track the value of the event within the BCI2000 visualization window</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	/// </summary>
+	/// <param name="name"> The name of the state to be added</param>
+	/// <param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	/// <param name="initialValue">The initial value of the state.</param>
+	/// <param name="visualize">Track the value of the event within the BCI2000 visualization window</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
 	public void AddEvent(string name, int bitWidth, UInt32 initialValue = 0, bool visualize = false) {
 	    if (name.Any(Char.IsWhiteSpace)) {
 		throw new BCI2000CommandException($"Error adding event {name}, event names must not contain whitespace");
@@ -286,37 +287,37 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
-	///<summary>
+	/// <summary>
 	///Sets the specified event to the specified value. To set an event for a single sample duration, use <see cref="PulseEvent(string, uint)"/>
-	///</summary>
-	///<param name="name">The name of the event to set</param>
-	///<param name="value">The value of the event to set</param>
+	/// </summary>
+	/// <param name="name">The name of the event to set</param>
+	/// <param name="value">The value of the event to set</param>
 	public void SetEvent(string name, UInt32 value) {
 	    connection.Execute($"set event {name} {value}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Sets the specified event to the specified value for a single sample duration. To set an event to a persistent value, use <see cref="SetEvent(string, uint)"/>
-	///</summary>
-	///<param name="name">The name of the event to pulse</param>
-	///<param name="value">The value of the event to pulse</param>
+	/// </summary>
+	/// <param name="name">The name of the event to pulse</param>
+	/// <param name="value">The value of the event to pulse</param>
 	public void PulseEvent(string name, UInt32 value) {
 	    connection.Execute($"pulse event {name} {value}");
 	}
 
-	///<summary>
+	/// <summary>
 	///Gets the value of the signal at the specified <paramref name="channel"/> and <paramref name="element"/>
-	///</summary>
-	///<param name="channel">The channel of the signal to get</param>
-	///<param name="element">The element of the signal to get</param>
+	/// </summary>
+	/// <param name="channel">The channel of the signal to get</param>
+	/// <param name="element">The element of the signal to get</param>
 	public double GetSignal(int channel, int element) {
 	    return connection.Execute<double>($"get signal({channel},{element})");
 	}
 
-	///<summary>
+	/// <summary>
 	///Gets the value of the specified event
-	///</summary>
-	///<param name="name">The name of the event to get</param>
+	/// </summary>
+	/// <param name="name">The name of the event to get</param>
 	public UInt32 GetEvent(string name){
 	    return connection.Execute<UInt32>($"get event {name}");
 	}
