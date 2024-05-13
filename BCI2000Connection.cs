@@ -19,6 +19,7 @@
 ///////////////////////////////////////////////////////////////////////////
 
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -117,7 +118,7 @@ namespace BCI2000RemoteNET {
 		connection.Connect(address, port);
 		connection.Close();
 		connection = null;
-		throw new BCI2000ConnectionException($"There is already something running at {address}:{port}, is BCI2000 already running?");
+		throw new BCI2000ConnectionException($"{address}:{port} is occupied, is BCI2000 already running?");
 	    } catch (SocketException) {
 		//Socket should not connect if BCI2000 is not already running
 	    }
@@ -168,6 +169,7 @@ namespace BCI2000RemoteNET {
 	    connection.SendTimeout = Timeout;
 	    connection.ReceiveTimeout = Timeout;
 
+        DiscardResponse(); //Throw out startup messages
 	    Execute("change directory $BCI2000LAUNCHDIR");
 	}
 
@@ -196,6 +198,7 @@ namespace BCI2000RemoteNET {
 	///</summary>
 	///<param name="command">The command to execute</param>
 	public string ExecuteString(string command) {
+			SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -206,6 +209,7 @@ namespace BCI2000RemoteNET {
 	///</summary>
 	///<param name="command">The command to execute</param>
 	public UInt32 ExecuteUInt32(string command) {
+			SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -217,6 +221,7 @@ namespace BCI2000RemoteNET {
 	///</summary>
 	///<param name="command">The command to execute</param>
 	public double ExecuteDouble(string command) {
+			SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -228,6 +233,7 @@ namespace BCI2000RemoteNET {
 	///</summary>
 	///<param name="command">The command to execute</param>
 	public bool ExecuteBool(string command) {
+			SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -241,6 +247,7 @@ namespace BCI2000RemoteNET {
 	///<param name="command">The command to send to BCI2000</param>
 	///<param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
 	public void Execute(string command, bool expectEmptyResponse = true) {
+			SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -253,7 +260,10 @@ namespace BCI2000RemoteNET {
 
 	//Sends command to BCI2000
 	private void SendCommand(string command){
-	    try {
+#if (DEBUG)
+			Console.WriteLine("send: " + command);
+#endif
+			try {
 		op_stream.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
@@ -297,10 +307,11 @@ namespace BCI2000RemoteNET {
 	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
 	private void ExpectEmptyResponse() { 
 	    string resp = ReceiveResponse();
-	    if (!string.IsNullOrWhiteSpace(resp)) {
+	    if (!IsEmptyOrPrompt(resp)) {
 		throw new BCI2000CommandException($"Expected empty response but received {resp} instead");
 	    }
 	}
+
 
 	//Receives response and discards the result.
 	private void DiscardResponse() {
@@ -311,19 +322,35 @@ namespace BCI2000RemoteNET {
 	//Receives response from the operator. Blocks until the prompt character ('>') is received.
 	private string ReceiveResponse() {
 	    StringBuilder response = new StringBuilder();
-	    while (true) {
-		int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
-		if (read > 0) { 
-		    string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
-		    if (EndsWithPrompt(resp_fragment) && !op_stream.DataAvailable) {
-			//Stop reading if previous response ended with prompt and no data is available
-			break;
-		    } else {
-			response.Append(resp_fragment);
-		    }
-		}
-	    }
-	    return response.ToString();
+			bool receiving = true;
+			while (receiving)
+			{
+				if (!op_stream.DataAvailable)
+				{
+					continue;
+				}
+				int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
+				if (read > 0)
+				{
+					string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
+#if (DEBUG)
+					Console.WriteLine("fr: " + resp_fragment);
+#endif
+					if (EndsWithPrompt(resp_fragment))
+					{
+						response.Append(resp_fragment.AsSpan(0, resp_fragment.LastIndexOf('>'))); //Don't include prompt in response
+						receiving = false;
+						break;
+					} else
+					{
+                        response.Append(resp_fragment);
+					} 
+				}
+			}
+#if (DEBUG)
+			Console.WriteLine("recv: " + response.ToString());
+#endif
+			return response.ToString();
 	}
 
         private bool EndsWithPrompt(string line)
@@ -332,6 +359,26 @@ namespace BCI2000RemoteNET {
             if (lineTrim.Length == 0) return false;
             return lineTrim.Substring(lineTrim.Length - 1).Equals(Prompt);
         }
+
+		//Checks if string consists of only whitespace characters or Prompt
+		private bool IsEmptyOrPrompt(string s)
+		{
+			if (s == null)
+			{
+				return true;
+			}
+			foreach (char c in s)
+			{
+                if (c <= 0x20 || c == '>')
+                {
+                    //Do nothing if char is <= x20 (which means it is whitespace) or is prompt.
+                } else
+				{
+					return false;
+				}
+            }
+			return true;
+		}
 
 	private TcpClient connection;
 	private NetworkStream op_stream;
