@@ -43,8 +43,13 @@ namespace BCI2000RemoteNET {
 
 	///<summary>
 	/// Starts up the specified BCI2000 modules. 
+<<<<<<< HEAD
 	///</summary>
 	///<param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional.</param>
+=======
+	/// </summary>
+	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional. </param>
+>>>>>>> a304788 (fixed doc comments)
 	public void StartupModules(Dictionary<string, List<string>> modules) {
 		connection.Execute("startup system");
 	    foreach((string mod_name, List<string> mod_args) in modules) {
@@ -232,11 +237,11 @@ namespace BCI2000RemoteNET {
 	///<summary>
 	///Adds a state variable to BCI2000. State variables have a temporal resolution of one block. To log values with a higher temporal resolution, use <see cref="AddEvent"/>
 	///Must be called when BCI2000 is in the Idle system state.
-	///</summary>
-	///<param name="name"> The name of the state to be added</param>
-	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
-	///<param name="initialValue">The initial value of the state.</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	/// </summary>
+	/// <param name="name"> The name of the state to be added</param>
+	/// <param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	/// <param name="initialValue">The initial value of the state.</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
 	public void AddState(string name, int bitWidth, UInt32 initialValue = 0) {
 	    if (name.Any(Char.IsWhiteSpace)) {
 		throw new BCI2000CommandException($"Error adding state {name}, state names must not contain whitespace");
@@ -270,11 +275,11 @@ namespace BCI2000RemoteNET {
 	///<summary>
 	///Adds an event to BCI2000. Events are similar to state variables but with a temporal resolution of one sample.
 	///Must be called when BCI2000 is in the Idle system state.
-	///</summary>
-	///<param name="name"> The name of the state to be added</param>
-	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
-	///<param name="initialValue">The initial value of the state.</param>
-	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	/// </summary>
+	/// <param name="name"> The name of the state to be added</param>
+	/// <param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	/// <param name="initialValue">The initial value of the state.</param>
+	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
 	public void AddEvent(string name, int bitWidth, UInt32 initialValue = 0) {
 	    if (name.Any(Char.IsWhiteSpace)) {
 		throw new BCI2000CommandException($"Error adding event {name}, event names must not contain whitespace");
