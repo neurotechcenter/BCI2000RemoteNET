@@ -25,27 +25,27 @@ using System.Net.Sockets;
 using System.Text;
 
 namespace BCI2000RemoteNET {
-    ///<summary>
+    /// <summary>
     ///Provides basic functionality for connection and communication with the BCI2000 operator module.
-    ///</summary>
+    /// </summary>
     public class BCI2000Connection {
 	//Size of the input read buffer. Should be larger than the largest possible response from BCI2000.
 	private const int READ_BUFFER_SIZE = 2048;
 
-	///<summary>
+	/// <summary>
 	/// Timeout value (in milliseconds) of connection to BCI2000
-	///</summary>
+	/// </summary>
 	public int Timeout{ get; set; } = 1000;
 
-	///<summary>
+	/// <summary>
 	/// Terminate operator when this object is deleted
 	/// </summary>
 	public bool TerminateOperatorOnDisconnect { get; set; } = true;
 
 	private string windowTitle = "";
-	///<summary>
+	/// <summary>
 	/// The title of the BCI2000 window
-	///</summary>
+	/// </summary>
 	public string WindowTitle {
 	    get {
 		return windowTitle;
@@ -59,9 +59,9 @@ namespace BCI2000RemoteNET {
 	}
 
 	private bool hideWindow;
-	///<summary>
+	/// <summary>
 	/// Hide the BCI2000 window
-	///</summary>
+	/// </summary>
 	private bool HideWindow {
 	    get {
 		return hideWindow;
@@ -86,9 +86,9 @@ namespace BCI2000RemoteNET {
 	    Disconnect();
 	}
 
-	///<summary>
+	/// <summary>
 	///Disconnects from the operator. Terminated the operator if <see cref="TerminateOperatorOnDisconnect"/> is set.
-	///</summary>
+	/// </summary>
 	public void Disconnect() {
 	    if (TerminateOperatorOnDisconnect && Connected()) {
 		Quit();
@@ -99,15 +99,15 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
-	///<summary>
+	/// <summary>
 	/// Starts an instance of the BCI2000 Operator on the local machine.
-	///</summary>
-	///<param name="operatorPath">The location of the operator binary</param>
-	///<param name="address"> The address on which the Operator will listen for input. Leave as default if you will only connect from the local system.
+	/// </summary>
+	/// <param name="operatorPath">The location of the operator binary </param>
+	/// <param name="address"> The address on which the Operator will listen for input. Leave as default if you will only connect from the local system.
 	/// Note on security: BCI2000Remote uses an unencrypted, unsecured telnet connection. Anyone who can access the connection can run BCI2000 shell scripts. This includes the capability to run arbitrary system shell code from the BCI2000 shell interface. 
 	/// Use extreme caution when exposing BCI2000 to the open internet, that is, setting <paramref name="address"/> to a value other than the loopback address (127.0.0.1). Do not leave a connection across machines open unattended. A secure interface is planned for a future release, until then using BCI2000 to communicate between machines on different LANs (not on the same Wi-Fi, in different buildings, etc.) is not recommended. Communication between different machines on the same LAN should be safe provided that the network router does not forward the BCI2000's host machine's BCI2000 port (by default 3999, but can be set on startup.)
-	///</param>
-	///<param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed.</param>
+	/// </param>
+	/// <param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed. </param>
 	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999) {
 	    if (port < 0 || port > 65535) {
 		throw new BCI2000ConnectionException($"Port number {port} is not valid");
@@ -140,11 +140,11 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
-	///<summary>
+	/// <summary>
 	///Establishes a connection to an instance of BCI2000 running at the specified address and port.
-	///</summary>
-	///<param name="address">The IPv4 address to connect to. Note that this may not necessarily be the same as the one used in <see cref="StartOperator">StartOperator</see>, even if running BCI2000 locally. For example, if the operator was started on the local machine with address <c>0.0.0.0</c>, you would connect to it at address <c>127.0.0.1</c></param>
-	///<param name="port">The port on which BCI2000 is listening. If BCI2000 was started locally with <see cref="StartOperator">StartOperator</see>, this must be the same value.</param>
+	/// </summary>
+	/// <param name="address">The IPv4 address to connect to. Note that this may not necessarily be the same as the one used in <see cref="StartOperator">StartOperator </see>, even if running BCI2000 locally. For example, if the operator was started on the local machine with address <c>0.0.0.0 </c>, you would connect to it at address <c>127.0.0.1 </c> </param>
+	/// <param name="port">The port on which BCI2000 is listening. If BCI2000 was started locally with <see cref="StartOperator">StartOperator </see>, this must be the same value. </param>
 	public void Connect(string address = "127.0.0.1", int port = 3999) {
 	    if (port < 0 || port > 65535) {
 		throw new BCI2000ConnectionException($"Port number {port} is not valid");
@@ -173,17 +173,17 @@ namespace BCI2000RemoteNET {
 	    Execute("change directory $BCI2000LAUNCHDIR");
 	}
 
-	///<summary>
+	/// <summary>
 	///Gets whether or not this BCI2000Remote instance is currently connected to the BCI2000 Operator
-	///</summary>
-	///<returns>Whether or not this object is currently connected to BCI2000</returns>
+	/// </summary>
+	/// <returns>Whether or not this object is currently connected to BCI2000 </returns>
 	public bool Connected() {
 	    return connection?.Connected ?? false;
 	}
 
-	///<summary>
+	/// <summary>
 	///Shuts down the connected BCI2000 instance
-	///</summary>
+	/// </summary>
 	public void Quit() {
 	    Execute("Quit");
 	}
@@ -191,12 +191,12 @@ namespace BCI2000RemoteNET {
 		[Obsolete("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.", true)]
 	public T Execute<T> ()
 		{
-			throw new NotImplementedException("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.");
+			throw new NotImplementedException("Using Execute <T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.");
 		}
-	///<summary>
+	/// <summary>
 	///Executes the given command and returns the result.
-	///</summary>
-	///<param name="command">The command to execute</param>
+	/// </summary>
+	/// <param name="command">The command to execute </param>
 	public string ExecuteString(string command) {
 			SendCommand(command);
 	    if (!Connected()) {
@@ -204,10 +204,10 @@ namespace BCI2000RemoteNET {
 	    }
 	    return ReceiveResponse();
 	}
-	///<summary>
+	/// <summary>
 	///Executees the command and returns the result parsed as UInt32
-	///</summary>
-	///<param name="command">The command to execute</param>
+	/// </summary>
+	/// <param name="command">The command to execute </param>
 	public UInt32 ExecuteUInt32(string command) {
 			SendCommand(command);
 	    if (!Connected()) {
@@ -216,10 +216,10 @@ namespace BCI2000RemoteNET {
 	    return GetResponseAsUInt();
 	}
 
-	///<summary>
+	/// <summary>
 	///Executees the command and returns the result parsed as double
-	///</summary>
-	///<param name="command">The command to execute</param>
+	/// </summary>
+	/// <param name="command">The command to execute </param>
 	public double ExecuteDouble(string command) {
 			SendCommand(command);
 	    if (!Connected()) {
@@ -228,10 +228,10 @@ namespace BCI2000RemoteNET {
 	    return GetResponseAsDouble();
 	}
 
-	///<summary>
+	/// <summary>
 	///Executees the command and returns the result parsed as bool
-	///</summary>
-	///<param name="command">The command to execute</param>
+	/// </summary>
+	/// <param name="command">The command to execute </param>
 	public bool ExecuteBool(string command) {
 			SendCommand(command);
 	    if (!Connected()) {
@@ -241,11 +241,11 @@ namespace BCI2000RemoteNET {
 	}
 
 
-	///<summary>
+	/// <summary>
 	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
-	///</summary>
-	///<param name="command">The command to send to BCI2000</param>
-	///<param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
+	/// </summary>
+	/// <param name="command">The command to send to BCI2000 </param>
+	/// <param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
 	public void Execute(string command, bool expectEmptyResponse = true) {
 			SendCommand(command);
 	    if (!Connected()) {
