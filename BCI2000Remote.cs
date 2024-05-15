@@ -263,13 +263,12 @@ namespace BCI2000RemoteNET {
 	/// <summary>
 	///Adds an event to BCI2000. Events are similar to state variables but with a temporal resolution of one sample.
 	///Must be called when BCI2000 is in the Idle system state.
-	/// </summary>
-	/// <param name="name"> The name of the state to be added</param>
-	/// <param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
-	/// <param name="initialValue">The initial value of the state.</param>
-	/// <param name="visualize">Track the value of the event within the BCI2000 visualization window</param>
-	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
-	public void AddEvent(string name, int bitWidth, UInt32 initialValue = 0, bool visualize = false) {
+	///</summary>
+	///<param name="name"> The name of the state to be added</param>
+	///<param name="bitWidth">The bit width of the new state. Must be between 1 and 32.</param>
+	///<param name="initialValue">The initial value of the state.</param>
+	///<exception cref="BCI2000CommandException">Thrown if BCI2000 is in invalid state or invalid parameters passed</param>
+	public void AddEvent(string name, int bitWidth, UInt32 initialValue = 0) {
 	    if (name.Any(Char.IsWhiteSpace)) {
 		throw new BCI2000CommandException($"Error adding event {name}, event names must not contain whitespace");
 	    }
@@ -280,9 +279,6 @@ namespace BCI2000RemoteNET {
 		throw new BCI2000CommandException($"Operator must be in Idle state to add an event, but is in state {GetSystemState()}");
 	    }
 	    connection.Execute($"add event {name} {bitWidth} {initialValue}");
-	    if (visualize) {
-		connection.Execute($"visualize watch {name}");
-	    }
 	}
 
 	/// <summary>
