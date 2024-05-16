@@ -45,12 +45,12 @@ namespace BCI2000RemoteNET {
 	/// <summary>
 	/// Starts up the specified BCI2000 modules. 
 	/// </summary>
-	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional. </param>
-	public void StartupModules(Dictionary<string, List<string>> modules) {
-		connection.Execute("startup system");
-	    foreach((string mod_name, List<string> mod_args) in modules) {
+	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional. Pass a null instead of a parameter list for no parameters. </param>
+	public void StartupModules(Dictionary<string, List<string>?> modules) {
+	    connection.Execute("startup system");
+	    foreach((string mod_name, List<string>? mod_args) in modules) {
 		//Format arguments to start with --
-		var args_p = mod_args.Select(arg => {
+		var args_p = mod_args?.Select(arg => {
 			arg = arg.Trim();
 			if (!arg.StartsWith("--")) {
 				arg = "--" + arg;
@@ -58,7 +58,7 @@ namespace BCI2000RemoteNET {
 			return arg;
 		    });
 
-		string args_str = args_p.Aggregate(new StringBuilder(),
+		string? args_str = args_p?.Aggregate(new StringBuilder(),
 			(builder, arg) => {
 			    builder.Append(" ");
 			    return builder.Append(arg);
@@ -66,10 +66,10 @@ namespace BCI2000RemoteNET {
 			builder => builder.ToString());
 
 		//Add --local argument if it does not exist in list
-		if (args_p.Where(str => str.Equals("--local")).Count() == 0) {
+		if (args_p?.Where(str => str.Equals("--local")).Count() == 0) {
 		    args_str = " --local" + args_str;
 		}
-		connection.Execute($"start executable {mod_name} {args_str}");
+		connection.Execute($"start executable {mod_name} {args_str ?? " --local"}");
 	    }
 
 	    WaitForSystemState(SystemState.Connected);

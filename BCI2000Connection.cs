@@ -95,7 +95,7 @@ namespace BCI2000RemoteNET {
 	    }
 	    if (connection != null) {
 		connection.Close();
-		connection = null; //This might be redundant
+		connection = null;
 	    }
 	}
 
@@ -223,7 +223,7 @@ namespace BCI2000RemoteNET {
 			Console.WriteLine("send: " + command);
 #endif
 			try {
-		op_stream.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
+		op_stream!.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
 	    }
@@ -262,7 +262,7 @@ namespace BCI2000RemoteNET {
 			bool receiving = true;
 			while (receiving)
 			{
-				if (!op_stream.DataAvailable)
+				if (!op_stream!.DataAvailable)
 				{
 					continue;
 				}
@@ -317,8 +317,8 @@ namespace BCI2000RemoteNET {
 			return true;
 		}
 
-	private TcpClient connection;
-	private NetworkStream op_stream;
+	private TcpClient? connection;
+	private NetworkStream? op_stream;
 
         private const string ReadlineTag = "\\AwaitingInput:";
         private const string AckTag = "\\AcknowledgedInput";
