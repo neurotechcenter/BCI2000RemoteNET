@@ -46,9 +46,9 @@ namespace BCI2000RemoteNET {
 	/// Starts up the specified BCI2000 modules. 
 	/// </summary>
 	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional. Pass a null instead of a parameter list for no parameters. </param>
-	public void StartupModules(Dictionary<string, List<string>?> modules) {
+	public void StartupModules(IDictionary<string, IEnumerable<string>?> modules) {
 	    connection.Execute("startup system");
-	    foreach((string mod_name, List<string>? mod_args) in modules) {
+	    foreach((string mod_name, var mod_args) in modules) {
 		//Format arguments to start with --
 		var args_p = mod_args?.Select(arg => {
 			arg = arg.Trim();
@@ -168,7 +168,7 @@ namespace BCI2000RemoteNET {
 	}
 
 	/// <summary>
-	///Adds a parameter to BCI2000. Must be called before <see cref="StartupModules(Dictionary{string, List{string}})"/>.
+	///Adds a parameter to BCI2000. Must be called before <see cref="StartupModules(IDictionary{string, IEnumerable{string}?})"/>.
 	///BCI2000RemoteNET provides no abstraction over BCI2000 parameters. It treats them as strings, and declares them within BCI2000 as the dynamic variant type.
 	/// </summary>
 	/// <param name="section">The section of the parameter. This will be the page on which the parameter appears in the BCI2000 parameters menu.</param>
@@ -190,7 +190,7 @@ namespace BCI2000RemoteNET {
 	
 	/// <summary>
 	///Loads the specified <c>.prm</c> file. If <paramref name="filename"/> is relative, it is relative to the working directory of BCI2000, which will most likely be the <c>prog</c> directory in the BCI2000 directory.
-	///Must be called before <see cref="StartupModules(Dictionary{string, List{string}})"/>.
+	///Must be called before <see cref="StartupModules()"/>.
 	/// </summary>
 	/// <param name="filename">Path to the parameter file to load</param>
 	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for loading parameters</exception>
