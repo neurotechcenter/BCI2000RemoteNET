@@ -23,6 +23,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace BCI2000RemoteNET {
     /// <summary>
@@ -95,7 +96,7 @@ namespace BCI2000RemoteNET {
 	    }
 	    if (connection != null) {
 		connection.Close();
-		connection = null; //This might be redundant
+		connection = null;
 	    }
 	}
 
@@ -108,7 +109,8 @@ namespace BCI2000RemoteNET {
 	/// Use extreme caution when exposing BCI2000 to the open internet, that is, setting <paramref name="address"/> to a value other than the loopback address (127.0.0.1). Do not leave a connection across machines open unattended. A secure interface is planned for a future release, until then using BCI2000 to communicate between machines on different LANs (not on the same Wi-Fi, in different buildings, etc.) is not recommended. Communication between different machines on the same LAN should be safe provided that the network router does not forward the BCI2000's host machine's BCI2000 port (by default 3999, but can be set on startup.)
 	/// </param>
 	/// <param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed. </param>
-	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999) {
+	/// <param name="delay">Time in milliseconds to wait after starting operator. This is to prevent failure to connect when the operator takes time to start up. </param>
+	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999, int delay = 200) {
 	    if (port < 0 || port > 65535) {
 		throw new BCI2000ConnectionException($"Port number {port} is not valid");
 	    }
@@ -135,9 +137,13 @@ namespace BCI2000RemoteNET {
 	    }
 	    try {
 		System.Diagnostics.Process.Start(operatorPath, arguments.ToString());
+#if DEBUG
+		Console.WriteLine($"Started operator path {operatorPath} at {address}:{port}");
+#endif
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Could not start operator at path {operatorPath}: {ex.ToString()}");
 	    }
+	    Thread.Sleep(delay);
 	}
 
 	/// <summary>
@@ -169,7 +175,7 @@ namespace BCI2000RemoteNET {
 	    connection.SendTimeout = Timeout;
 	    connection.ReceiveTimeout = Timeout;
 
-        DiscardResponse(); //Throw out startup messages
+	    DiscardResponse(); //Throw out startup messages
 	    Execute("change directory $BCI2000LAUNCHDIR");
 	}
 
@@ -188,7 +194,7 @@ namespace BCI2000RemoteNET {
 	    Execute("Quit");
 	}
 
-		[Obsolete("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.", true)]
+	[Obsolete("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.", true)]
 	public T Execute<T> ()
 		{
 			throw new NotImplementedException("Using Execute <T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.");
@@ -198,18 +204,19 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <param name="command">The command to execute </param>
 	public string ExecuteString(string command) {
-			SendCommand(command);
+	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
 	    return ReceiveResponse();
 	}
+
 	/// <summary>
 	///Executees the command and returns the result parsed as UInt32
 	/// </summary>
 	/// <param name="command">The command to execute </param>
 	public UInt32 ExecuteUInt32(string command) {
-			SendCommand(command);
+	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -221,7 +228,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <param name="command">The command to execute </param>
 	public double ExecuteDouble(string command) {
-			SendCommand(command);
+	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -247,7 +254,7 @@ namespace BCI2000RemoteNET {
 	/// <param name="command">The command to send to BCI2000 </param>
 	/// <param name="expectEmptyResponse">By default, this function will throw if its command receives a non-empty response from BCI2000. This is because most BCI2000 commands which do not return a value will not send a response if they succeed. If set to false, this function will acceept non-empty responses from BCI2000.
 	public void Execute(string command, bool expectEmptyResponse = true) {
-			SendCommand(command);
+	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
@@ -261,10 +268,10 @@ namespace BCI2000RemoteNET {
 	//Sends command to BCI2000
 	private void SendCommand(string command){
 #if (DEBUG)
-			Console.WriteLine("send: " + command);
+	    Console.WriteLine("send: " + command);
 #endif
-			try {
-		op_stream.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
+	    try {
+		op_stream!.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
 	    }
@@ -325,7 +332,7 @@ namespace BCI2000RemoteNET {
 			bool receiving = true;
 			while (receiving)
 			{
-				if (!op_stream.DataAvailable)
+				if (!op_stream!.DataAvailable)
 				{
 					continue;
 				}
@@ -380,8 +387,8 @@ namespace BCI2000RemoteNET {
 			return true;
 		}
 
-	private TcpClient connection;
-	private NetworkStream op_stream;
+	private TcpClient? connection;
+	private NetworkStream? op_stream;
 
         private const string ReadlineTag = "\\AwaitingInput:";
         private const string AckTag = "\\AcknowledgedInput";

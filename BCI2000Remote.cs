@@ -29,7 +29,7 @@ namespace BCI2000RemoteNET {
     /// </summary>
     public class BCI2000Remote {
 	/// <summary>
-	///The <see cref="BCI2000Connection"/> which handles connection with BCI2000
+	/// The <see cref="BCI2000Connection"/> which handles connection with BCI2000
 	///Note: It is defined as readonly because I can see no possible case in which it would be useful to swap connections in a BCI2000Remote object, especially as BCI2000Remote holds no state.
 	/// </summary>
 	public readonly BCI2000Connection connection;
@@ -37,7 +37,7 @@ namespace BCI2000RemoteNET {
 	/// <summary>
 	///Constructor for <see cref="BCI2000Remote"/>
 	/// </summary>
-	/// <param name="connection">Connection object which is connected to a BCI2000 instance. Can be set to connect after this object is constructed as long as no methods of this class which require communication with BCI2000 are called beforehand </param
+	/// <param name="connection">Connection object which is connected to a BCI2000 instance. Can be set to connect after this object is constructed as long as no methods of this class which require communication with BCI2000 are called beforehand </param>
 	public BCI2000Remote(BCI2000Connection connection) {
 	    this.connection = connection;
 	}
@@ -45,12 +45,12 @@ namespace BCI2000RemoteNET {
 	/// <summary>
 	/// Starts up the specified BCI2000 modules. 
 	/// </summary>
-	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional. </param>
-	public void StartupModules(Dictionary<string, List<string>> modules) {
-		connection.Execute("startup system");
-	    foreach((string mod_name, List<string> mod_args) in modules) {
+	/// <param name="modules">The modules to start. A dictionary whose keys are the names of the modules to start ("SignalGenerator", "DummyApplication", etc.), and whose values are a list of arguments to the modules ("LogKeyboard=1", "LogEyetrackerTobiiPro=1". The "--" in front of each argument is optional. Pass a null instead of a parameter list for no parameters. </param>
+	public void StartupModules(IDictionary<string, IEnumerable<string>?> modules) {
+	    connection.Execute("startup system");
+	    foreach((string mod_name, var mod_args) in modules) {
 		//Format arguments to start with --
-		var args_p = mod_args.Select(arg => {
+		var args_p = mod_args?.Select(arg => {
 			arg = arg.Trim();
 			if (!arg.StartsWith("--")) {
 				arg = "--" + arg;
@@ -58,7 +58,7 @@ namespace BCI2000RemoteNET {
 			return arg;
 		    });
 
-		string args_str = args_p.Aggregate(new StringBuilder(),
+		string? args_str = args_p?.Aggregate(new StringBuilder(),
 			(builder, arg) => {
 			    builder.Append(" ");
 			    return builder.Append(arg);
@@ -66,13 +66,13 @@ namespace BCI2000RemoteNET {
 			builder => builder.ToString());
 
 		//Add --local argument if it does not exist in list
-		if (args_p.Where(str => str.Equals("--local")).Count() == 0) {
+		if (args_p?.Where(str => str.Equals("--local")).Count() == 0) {
 		    args_str = " --local" + args_str;
 		}
-		connection.Execute($"start executable {mod_name} {args_str}");
+		connection.Execute($"start executable {mod_name} {args_str ?? " --local"}");
 	    }
 
-	    WaitForSystemState(SystemState.Connected);
+	    WaitForSystemState(new SystemState[] {SystemState.Connected, SystemState.Initialization});
 	    remoteState = RemoteState.Connected;
 	}
 
@@ -82,7 +82,7 @@ namespace BCI2000RemoteNET {
 	public enum SystemState {
 	    Idle,
 	    Startup,
-		Initialization,
+	    Initialization,
 	    Connected,
 	    Resting,
 	    Suspended,
@@ -96,28 +96,38 @@ namespace BCI2000RemoteNET {
 	///Waits for the system to be in the specified state.
 	///This will block until the system is in the specified state.
 	/// </summary>
-	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely. </param>
-	/// <returns>True if the system state was reached within the timeout time. </returns>
+	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	/// <returns>True if the system state was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState state, double? timeout = null) {
-			if (timeout != null)
-			{
-				return connection.ExecuteBool($"wait for {state} {timeout}");
-			} else
-			{
-				connection.Execute($"wait for {state}");
-				return true;
-			}
+#if (DEBUG)
+	    Console.WriteLine($"Wait for {state}");
+#endif
+	    if (timeout != null) {
+		return connection.ExecuteBool($"wait for {state} {timeout?.ToString() ?? ""}");
+	    } else {
+		connection.Execute($"wait for {state} {timeout?.ToString() ?? ""}");
+		return true;
+	    }
+
 	}
 
 	/// <summary>
 	///Waits for the system to be in one of the specified states.
 	///This will block until the system is in the specified state.
 	/// </summary>
-	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely. </param>
-	/// <returns>True if one of the states was reached within the timeout time. </returns>
+	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	/// <returns>True if one of the states was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState[] states, double? timeout = null) {
-	    string states_str = string.Join('|', states.Select(state => nameof(state)).ToArray());
-	    return connection.ExecuteBool($"wait for {states_str} {timeout?.ToString() ?? ""}");
+	    string states_str = string.Join('|', states.Select(state => state.ToString()).ToArray());
+#if (DEBUG)
+	    Console.WriteLine($"Wait for {states_str}");
+#endif
+	    if (timeout != null) {
+		return connection.ExecuteBool($"wait for {states_str} {timeout?.ToString() ?? ""}");
+	    } else {
+		connection.Execute($"wait for {states_str} {timeout?.ToString() ?? ""}");
+		return true;
+	    }
 	}
 
 	/// <summary>
