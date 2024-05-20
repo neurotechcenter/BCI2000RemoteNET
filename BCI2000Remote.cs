@@ -72,9 +72,10 @@ namespace BCI2000RemoteNET {
 		connection.Execute($"start executable {mod_name} {args_str ?? " --local"}");
 	    }
 
-	    WaitForSystemState(SystemState.Connected);
+	    WaitForSystemState([SystemState.Connected, SystemState.Initialization]);
 	    remoteState = RemoteState.Connected;
 	}
+
 
 	/// <summary>
 	/// BCI2000 Operator states of operation, as documented on the <anchor xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bci2000.org/mediawiki/index.php/User_Reference:Operator_Module_Scripting#WAIT_FOR_%3Csystem_state%3E_[%3Ctimeout_seconds%3E]">BCI2000 Wiki</anchor>
@@ -82,7 +83,7 @@ namespace BCI2000RemoteNET {
 	public enum SystemState {
 	    Idle,
 	    Startup,
-		Initialization,
+	    Initialization,
 	    Connected,
 	    Resting,
 	    Suspended,
@@ -99,7 +100,16 @@ namespace BCI2000RemoteNET {
 	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
 	/// <returns>True if the system state was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState state, double? timeout = null) {
-	    return connection.Execute<bool>($"wait for {nameof(state)} {timeout?.ToString() ?? ""}");
+#if (DEBUG)
+	    Console.WriteLine($"Wait for {state}");
+#endif
+	    if (timeout != null) {
+		return connection.Execute<bool>($"wait for {state} {timeout?.ToString() ?? ""}");
+	    } else {
+		connection.Execute($"wait for {state} {timeout?.ToString() ?? ""}");
+		return true;
+	    }
+
 	}
 
 	/// <summary>
@@ -109,8 +119,16 @@ namespace BCI2000RemoteNET {
 	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
 	/// <returns>True if one of the states was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState[] states, double? timeout = null) {
-	    string states_str = string.Join('|', states.Select(state => nameof(state)).ToArray());
-	    return connection.Execute<bool>($"wait for {states_str} {timeout?.ToString() ?? ""}");
+	    string states_str = string.Join('|', states.Select(state => state.ToString()).ToArray());
+#if (DEBUG)
+	    Console.WriteLine($"Wait for {states_str}");
+#endif
+	    if (timeout != null) {
+		return connection.Execute<bool>($"wait for {states_str} {timeout?.ToString() ?? ""}");
+	    } else {
+		connection.Execute($"wait for {states_str} {timeout?.ToString() ?? ""}");
+		return true;
+	    }
 	}
 
 	/// <summary>
