@@ -329,7 +329,16 @@ namespace BCI2000RemoteNET {
 	/// <summary>
 	///Gets the value of the specified event
 	/// </summary>
-	/// <param name="name">The name of the event to get</param>
+	/// <param name="name">The name of the event to get </param>
+	/// <param name="sample">The 1-indexed position in the state vector (individual event value per sample in block) </param>
+	public UInt32 GetEvent(string name, int sample){
+	    return connection.Execute<UInt32>($"get event[{sample}] {name}");
+	}
+
+	/// <summary>
+	///Gets the value of the specified event
+	/// </summary>
+	/// <param name="name">The name of the event to get </param>
 	public UInt32 GetEvent(string name){
 	    return connection.Execute<UInt32>($"get event {name}");
 	}
