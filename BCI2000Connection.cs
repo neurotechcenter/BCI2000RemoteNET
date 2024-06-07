@@ -190,7 +190,7 @@ namespace BCI2000RemoteNET {
 	///Shuts down the connected BCI2000 instance
 	/// </summary>
 	public void Quit() {
-	    Execute("Quit");
+	    Execute("Quit", expectEmptyResponse: false);
 	}
 
 	/// <summary>
