@@ -230,7 +230,7 @@ namespace BCI2000RemoteNET {
 		SystemState current_state = GetSystemState();
 		throw new BCI2000CommandException($"Cannot set parameter, system is not in correct state. Operator must be in state Idle or Connected, but was instead in state {current_state}.");
 	    }
-	    connection.Execute($"set parameter {name} {value}");
+	    connection.Execute($"set parameter {name} \"{value}\"");
 	}
 
 	/// <summary>
