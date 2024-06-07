@@ -191,7 +191,7 @@ namespace BCI2000RemoteNET {
 	///Shuts down the connected BCI2000 instance
 	/// </summary>
 	public void Quit() {
-	    Execute("Quit");
+	    Execute("Quit", expectEmptyResponse: false);
 	}
 
 	[Obsolete("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.", true)]
