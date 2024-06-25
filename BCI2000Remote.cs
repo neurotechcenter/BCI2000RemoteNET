@@ -213,8 +213,9 @@ namespace BCI2000RemoteNET {
 	/// <param name="filename">Path to the parameter file to load </param>
 	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for loading parameters </exception>
 	public void LoadParameters(string filename) {
-	    if (GetSystemState() != SystemState.Connected) {
-		throw new BCI2000CommandException("Parameters must be added immediately after modules have started. This method must be called before SetConfig() and after StartupModules().");
+	    SystemState state = GetSystemState();
+	    if (state != SystemState.Connected && state != SystemState.Initialization) {
+		throw new BCI2000CommandException($"Parameters must be added immediately after modules have started. This method must be called before SetConfig() and after StartupModule(). Expected state Connected but got state {state}");
 	    }
 	    connection.Execute($"load parameters {filename}");
 	}
