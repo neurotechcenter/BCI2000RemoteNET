@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>1.0.0-b2</Version>
+    <Version>1.0.0-b3</Version>
     <Authors>Ty Butler</Authors>
     <Company>BCI2000</Company>
     <Product />
