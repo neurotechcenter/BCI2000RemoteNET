@@ -92,6 +92,30 @@ namespace BCI2000RemoteNET {
 	    Termination,
 	    Busy
 	}
+	
+	/// <summary>
+	/// Outputs a message to the system log.
+	/// </summary>
+	/// <param name="message"> The message to output to the system log </param>
+	public void Log(string message) {
+	    connection.Execute($"log {message}");
+	}
+
+	/// <summary>
+	/// Outputs a warning message to the system log
+	/// </summary>
+	/// <param name="message"> The warning message to output to the system log </param>
+	public void Warn(string message) {
+	    connection.Execute($"warn {message}");
+	}
+
+	/// <summary>
+	/// Outputs an error message to the system log
+	/// </summary>
+	/// <param name="message"> The error message to output to the system log </param>
+	public void Error(string message) {
+	    connection.Execute($"error {message}");
+	}
 
 	/// <summary>
 	///Waits for the system to be in the specified state.
