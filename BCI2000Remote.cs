@@ -72,7 +72,7 @@ namespace BCI2000RemoteNET {
 		connection.Execute($"start executable {mod_name} {args_str ?? " --local"}");
 	    }
 
-	    WaitForSystemState([SystemState.Connected, SystemState.Initialization]);
+	    WaitForSystemState(new[] {SystemState.Connected, SystemState.Initialization});
 	    remoteState = RemoteState.Connected;
 	}
 
@@ -220,7 +220,7 @@ namespace BCI2000RemoteNET {
 	/// <param name="minValue">The minimum value of the parameter. This argument is optional.</param>
 	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for adding parameters</exception>
 	public void AddParameter(string section, string name, string defaultValue = "%", string minValue = "%", string maxValue = "%") {
-	    var containsWS = ((string[])[section, name, defaultValue, minValue, maxValue]).Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
+	    var containsWS = (new []{section, name, defaultValue, minValue, maxValue}).Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
 	    if (containsWS.Count() != 0) {
 		throw new BCI2000CommandException($"Parameter definition parameters must not contain whitespace. Parameter(s) {string.Join(',', containsWS)} contain whitespace.");
 	    }
