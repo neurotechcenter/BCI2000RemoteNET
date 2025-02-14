@@ -23,6 +23,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 
+#nullable enable
+
 namespace BCI2000RemoteNET {
     /// <summary>
     ///Provides functionality for control of BCI2000.
