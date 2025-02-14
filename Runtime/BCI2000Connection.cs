@@ -27,7 +27,7 @@ using System.Threading;
 
 #nullable enable
 
-namespace BCI2000RemoteNET {
+namespace Bci2000 {
     /// <summary>
     ///Provides basic functionality for connection and communication with the BCI2000 operator module.
     /// </summary>
