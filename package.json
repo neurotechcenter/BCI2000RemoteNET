@@ -1,0 +1,14 @@
+{
+    "name": "games.bci.bci2000unity",
+    "version": "1.0.0-b4",
+    "displayName": "BCI 2000",
+    "description": "The BCI 2000 package provides a remote interface for the BCI 2000 operator.",
+    "documentationUrl": "https://github.com/bci-games/bci-2000-unity",
+    "license": "GPL-3.0-only",
+    "author": {
+        "name": "BCI Games",
+        "email": "contact@bci.games",
+        "url": "https://bci.games"
+    },
+    "samples": []
+}
