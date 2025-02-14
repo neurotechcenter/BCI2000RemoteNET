@@ -1,6 +1,6 @@
 using System;
 
-namespace Bci2000
+namespace BCI2000
 {
 /**
     *  Exception indicating that a command sent to BCI2000 has failed

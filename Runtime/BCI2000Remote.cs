@@ -25,7 +25,7 @@ using System.Linq;
 
 #nullable enable
 
-namespace Bci2000 {
+namespace BCI2000 {
     /// <summary>
     ///Provides functionality for control of BCI2000.
     /// </summary>
