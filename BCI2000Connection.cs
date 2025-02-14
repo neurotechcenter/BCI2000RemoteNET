@@ -198,7 +198,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
 	/// <param name="command">The command to execute</param>
-	public T Execute<T>(string command) where T : IParsable<T> {
+	public T Execute<T>(string command) {
 	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
@@ -236,15 +236,29 @@ namespace BCI2000RemoteNET {
 	}
 
 	//Gets the response from the operator and attempts to parse into the given type
-	private T GetResponseAs<T>() where T : IParsable<T> {
-	    string resp = ReceiveResponse();
+	private T GetResponseAs<T>() {
+	    string response = ReceiveResponse();
 	    try {
-		T result = T.Parse(resp, null);
-		return result;
+		if (typeof(T) == typeof(string))
+			return response;
+		return ParseResponse(response);
 	    } catch (Exception ex) {
-		throw new BCI2000CommandException($"Could not parse response {resp} as type {nameof(T)}, {ex}");
+		throw new BCI2000CommandException($"Could not parse response {response} as type {nameof(T)}, {ex}");
 	    }
+	}
 
+	//Parses response if given type has a Parse(string) method
+	private T ParseResponse<T>(string response)
+	{
+		try {
+		MethodInfo parseMethod = typeof(T).GetMethod("Parse", new Type[] {typeof(string)});
+		if (parseMethod is not null) {
+			return (T)parseMethod.Invoke(null, new object[] {response});
+		}
+		throw new BCI2000CommandException($"Parsing of response type {nameof(T)} is unsupported");
+		} catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response {response} as type {nameof(T)}, {ex}");
+		}
 	}
 
 	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
