@@ -21,6 +21,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 
@@ -240,8 +241,8 @@ namespace BCI2000RemoteNET {
 	    string response = ReceiveResponse();
 	    try {
 		if (typeof(T) == typeof(string))
-			return response;
-		return ParseResponse(response);
+			return (T)(object)response;
+		return ParseResponse<T>(response);
 	    } catch (Exception ex) {
 		throw new BCI2000CommandException($"Could not parse response {response} as type {nameof(T)}, {ex}");
 	    }
