@@ -241,27 +241,21 @@ namespace BCI2000RemoteNET {
 	//Gets the response from the operator and attempts to parse into the given type
 	private T GetResponseAs<T>() {
 	    string response = ReceiveResponse();
-	    try {
-		if (typeof(T) == typeof(string))
+		
+		if (typeof(T) == typeof(string)) {
 			return (T)(object)response;
-		return ParseResponse<T>(response);
-	    } catch (Exception ex) {
-		throw new BCI2000CommandException($"Could not parse response {response} as type {nameof(T)}, {ex}");
-	    }
-	}
+		}
 
-	//Parses response if given type has a Parse(string) method
-	private T ParseResponse<T>(string response)
-	{
-		try {
+	    try {
 		MethodInfo parseMethod = typeof(T).GetMethod("Parse", new Type[] {typeof(string)});
 		if (parseMethod is not null) {
 			return (T)parseMethod.Invoke(null, new object[] {response});
 		}
-		throw new BCI2000CommandException($"Parsing of response type {nameof(T)} is unsupported");
-		} catch (Exception ex) {
-		throw new BCI2000CommandException($"Could not parse response {response} as type {nameof(T)}, {ex}");
-		}
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Failed to parse response {response} as type {nameof(T)}, {ex}");
+	    }
+
+		throw new BCI2000CommandException($"Response parsing unsupported for type {nameof(T)}");
 	}
 
 	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
