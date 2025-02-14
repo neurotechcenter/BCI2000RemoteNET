@@ -266,8 +266,15 @@ namespace BCI2000RemoteNET {
 	private string ReceiveResponse() {
 	    StringBuilder response = new StringBuilder();
 			bool receiving = true;
+			float startTime = DateTime.UtcNow.Millisecond;
 			while (receiving)
 			{
+				float elapsedTime = DateTime.UtcNow.Millisecond - startTime;
+				if (elapsedTime > Timeout)
+				{
+					throw new TimeoutException();
+				}
+
 				if (!op_stream!.DataAvailable)
 				{
 					continue;
