@@ -277,10 +277,10 @@ namespace BCI2000RemoteNET {
 	private string ReceiveResponse() {
 	    StringBuilder response = new StringBuilder();
 			bool receiving = true;
-			float startTime = DateTime.UtcNow.Millisecond;
+			long startTime = GetSystemTime();
 			while (receiving)
 			{
-				float elapsedTime = DateTime.UtcNow.Millisecond - startTime;
+				long elapsedTime = GetSystemTime() - startTime;
 				if (elapsedTime > Timeout)
 				{
 					throw new TimeoutException();
@@ -340,6 +340,11 @@ namespace BCI2000RemoteNET {
             }
 			return true;
 		}
+
+	private long GetSystemTime()
+	{
+		return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+	}	
 
 	private TcpClient? connection;
 	private NetworkStream? op_stream;
