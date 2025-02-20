@@ -186,7 +186,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <returns>Whether or not this object is currently connected to BCI2000</returns>
 	public bool Connected() {
-	    return connection?.Connected ?? false;
+	    return connection?.IsConnected() ?? false;
 	}
 
 	/// <summary>
@@ -280,6 +280,12 @@ namespace BCI2000RemoteNET {
 			long startTime = GetSystemTime();
 			while (receiving)
 			{
+				if (!Connected()) {
+					throw new BCI2000ConnectionException(
+						"Lost connection while receiving response"
+					);
+				}
+
 				long elapsedTime = GetSystemTime() - startTime;
 				if (elapsedTime > Timeout)
 				{
