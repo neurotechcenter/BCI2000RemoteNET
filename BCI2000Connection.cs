@@ -287,7 +287,7 @@ namespace BCI2000RemoteNET {
 				}
 
 				long elapsedTime = GetSystemTime() - startTime;
-				if (elapsedTime > Timeout)
+				if (Timeout > 0 && elapsedTime > Timeout)
 				{
 					throw new TimeoutException();
 				}
