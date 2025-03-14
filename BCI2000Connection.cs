@@ -21,8 +21,11 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
+
+#nullable enable
 
 namespace BCI2000RemoteNET {
     /// <summary>
@@ -183,7 +186,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <returns>Whether or not this object is currently connected to BCI2000</returns>
 	public bool Connected() {
-	    return connection?.Connected ?? false;
+	    return connection?.IsConnected() ?? false;
 	}
 
 	/// <summary>
@@ -198,7 +201,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
 	/// <param name="command">The command to execute</param>
-	public T Execute<T>(string command) where T : IParsable<T> {
+	public T Execute<T>(string command) {
 	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
@@ -236,15 +239,23 @@ namespace BCI2000RemoteNET {
 	}
 
 	//Gets the response from the operator and attempts to parse into the given type
-	private T GetResponseAs<T>() where T : IParsable<T> {
-	    string resp = ReceiveResponse();
+	private T GetResponseAs<T>() {
+	    string response = ReceiveResponse();
+		
+		if (typeof(T) == typeof(string)) {
+			return (T)(object)response;
+		}
+
 	    try {
-		T result = T.Parse(resp, null);
-		return result;
+		MethodInfo parseMethod = typeof(T).GetMethod("Parse", new Type[] {typeof(string)});
+		if (parseMethod is not null) {
+			return (T)parseMethod.Invoke(null, new object[] {response});
+		}
 	    } catch (Exception ex) {
-		throw new BCI2000CommandException($"Could not parse response {resp} as type {nameof(T)}, {ex}");
+		throw new BCI2000CommandException($"Failed to parse response {response} as type {nameof(T)}, {ex}");
 	    }
 
+		throw new BCI2000CommandException($"Response parsing unsupported for type {nameof(T)}");
 	}
 
 	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
@@ -266,8 +277,21 @@ namespace BCI2000RemoteNET {
 	private string ReceiveResponse() {
 	    StringBuilder response = new StringBuilder();
 			bool receiving = true;
+			long startTime = GetSystemTime();
 			while (receiving)
 			{
+				if (!Connected()) {
+					throw new BCI2000ConnectionException(
+						"Lost connection while receiving response"
+					);
+				}
+
+				long elapsedTime = GetSystemTime() - startTime;
+				if (Timeout > 0 && elapsedTime > Timeout)
+				{
+					throw new TimeoutException();
+				}
+
 				if (!op_stream!.DataAvailable)
 				{
 					continue;
@@ -322,6 +346,11 @@ namespace BCI2000RemoteNET {
             }
 			return true;
 		}
+
+	private long GetSystemTime()
+	{
+		return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+	}	
 
 	private TcpClient? connection;
 	private NetworkStream? op_stream;
