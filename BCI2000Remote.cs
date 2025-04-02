@@ -78,7 +78,6 @@ namespace BCI2000RemoteNET {
 	    remoteState = RemoteState.Connected;
 	}
 
-
 	/// <summary>
 	/// BCI2000 Operator states of operation, as documented on the <anchor xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bci2000.org/mediawiki/index.php/User_Reference:Operator_Module_Scripting#WAIT_FOR_%3Csystem_state%3E_[%3Ctimeout_seconds%3E]">BCI2000 Wiki</anchor>
 	/// </summary>
@@ -101,6 +100,22 @@ namespace BCI2000RemoteNET {
 	/// <param name="message"> The message to output to the system log </param>
 	public void Log(string message) {
 	    connection.Execute($"log {message}");
+	}
+
+	/// <summary>
+	/// Outputs a warning message to the system log
+	/// </summary>
+	/// <param name="message"> The warning message to output to the system log </param>
+	public void Warn(string message) {
+	    connection.Execute($"warn {message}");
+	}
+
+	/// <summary>
+	/// Outputs an error message to the system log
+	/// </summary>
+	/// <param name="message"> The error message to output to the system log </param>
+	public void Error(string message) {
+	    connection.Execute($"error {message}");
 	}
 
 	/// <summary>
@@ -352,6 +367,18 @@ namespace BCI2000RemoteNET {
 	/// <param name="value">The value of the event to set </param>
 	public void SetEvent(string name, UInt32 value) {
 	    connection.Execute($"set event {name} {value}");
+	}
+
+	/// <summary>
+	/// Sets all given events to the given values, in one command. This avoids the additional overhead of calling these commands sequentially
+	/// </summary>
+	/// <param name="events"> List of name, value pairs. The given events will be set to the given values. </param>
+	public void BatchSetEvent(IEnumerable<(string, UInt32)> events) {
+	    StringBuilder s = new StringBuilder();
+	    foreach ((string name, UInt32 value) in events) {
+		s.Append($"set event {name} {value};");
+	    }
+	    connection.Execute(s.ToString());
 	}
 
 	/// <summary>

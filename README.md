@@ -21,8 +21,9 @@ This is primarily due to the fact that Unity, which is the main usecase of BCI20
 Unity has plans for moving to the .NET Core runtime, at which point the .NET Standard version of BCI2000RemoteNET will not be needed, but until then it will be maintained alongside the .NET 8.0 version.
 The two versions are nearly functionally equivalent except for the `Execute<T>()` method. .NET Standard 2.1 does not support generic parsing via `IParsable`, so `Execute<T>` is not available. 
 Instead, the methods `ExecuteString, ExecuteUInt32, ExecuteDouble, and ExecuteBool` are provided, which return their indicated type. 
+<<<<<<< HEAD
 
 Documentation
 ---
 
-Full documentation if located on the [BCI2000 Wiki](https://www.bci2000.org/mediawiki/index.php/Contributions:BCI2000RemoteNET)
+Full documentation is located on the [BCI2000 Wiki](https://www.bci2000.org/mediawiki/index.php/Contributions:BCI2000RemoteNET)

@@ -2,9 +2,14 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
+<<<<<<< HEAD
     <LangVersion>9.0</LangVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Version>1.0.0-b5</Version>
+=======
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>1.0.0-b3</Version>
+>>>>>>> f48c51e19a2b3153e2ea11594902fe65b6c43082
     <Authors>Ty Butler</Authors>
     <Company>BCI2000</Company>
     <Product />

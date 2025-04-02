@@ -113,8 +113,8 @@ namespace BCI2000RemoteNET {
 	/// Note on security: BCI2000Remote uses an unencrypted, unsecured telnet connection. Anyone who can access the connection can run BCI2000 shell scripts. This includes the capability to run arbitrary system shell code from the BCI2000 shell interface. 
 	/// Use extreme caution when exposing BCI2000 to the open internet, that is, setting <paramref name="address"/> to a value other than the loopback address (127.0.0.1). Do not leave a connection across machines open unattended. A secure interface is planned for a future release, until then using BCI2000 to communicate between machines on different LANs (not on the same Wi-Fi, in different buildings, etc.) is not recommended. Communication between different machines on the same LAN should be safe provided that the network router does not forward the BCI2000's host machine's BCI2000 port (by default 3999, but can be set on startup.)
 	/// </param>
-	/// <param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed.</param>
-	/// <param name="delay">Time in milliseconds to wait after starting operator. This is to prevent failure to connect when the operator takes time to start up.</param>
+	/// <param name="port"> The port on which the Operator will listen for input. Leave as default unless a specific port is needed. </param>
+	/// <param name="delay">Time in milliseconds to wait after starting operator. This is to prevent failure to connect when the operator takes time to start up. </param>
 	public void StartOperator(string operatorPath, string address = "127.0.0.1", int port = 3999, int delay = 200) {
 	    if (port < 0 || port > 65535) {
 		throw new BCI2000ConnectionException($"Port number {port} is not valid");
@@ -198,12 +198,16 @@ namespace BCI2000RemoteNET {
 	}
 
 	/**
-	/// <summary>
-	///Executes the given command and returns the result as type <typeparamref name="T"/>. Throws if the response cannot be parsed as <typeparamref name="T"/>. If you are trying to execute a command which does not produce output, use <see cref="Execute(string, bool)"/>.
-	/// </summary>
+	[Obsolete("Using Execute<T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.", true)]
+	public T Execute<T> ()
+		{
+			throw new NotImplementedException("Using Execute <T> with arbitrary type is not supported in the .NET Standard version of BCI2000RemoteNET. For an explanation, view the README.");
+		}
 	/// <typeparam name="T">Type of the result of the command. Must implement <see cref="IParsable{TSelf}"/>.</typeparam> 
 	/// <param name="command">The command to execute</param>
 	public T Execute<T>(string command) {
+	/// <param name="command">The command to execute </param>
+	public string ExecuteString(string command) {
 	    SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
@@ -255,6 +259,43 @@ namespace BCI2000RemoteNET {
 	/// <param name="command">The command to execute </param>
 	public bool ExecuteBool(string command) {
 	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsBool();
+	}
+
+
+	/// <summary>
+	///Executees the command and returns the result parsed as UInt32
+	/// </summary>
+	/// <param name="command">The command to execute </param>
+	public UInt32 ExecuteUInt32(string command) {
+	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsUInt();
+	}
+
+	/// <summary>
+	///Executees the command and returns the result parsed as double
+	/// </summary>
+	/// <param name="command">The command to execute </param>
+	public double ExecuteDouble(string command) {
+	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsDouble();
+	}
+
+	/// <summary>
+	///Executees the command and returns the result parsed as bool
+	/// </summary>
+	/// <param name="command">The command to execute </param>
+	public bool ExecuteBool(string command) {
+			SendCommand(command);
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
