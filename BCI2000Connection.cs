@@ -267,43 +267,6 @@ namespace BCI2000RemoteNET {
 
 
 	/// <summary>
-	///Executees the command and returns the result parsed as UInt32
-	/// </summary>
-	/// <param name="command">The command to execute </param>
-	public UInt32 ExecuteUInt32(string command) {
-	    SendCommand(command);
-	    if (!Connected()) {
-		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
-	    }
-	    return GetResponseAsUInt();
-	}
-
-	/// <summary>
-	///Executees the command and returns the result parsed as double
-	/// </summary>
-	/// <param name="command">The command to execute </param>
-	public double ExecuteDouble(string command) {
-	    SendCommand(command);
-	    if (!Connected()) {
-		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
-	    }
-	    return GetResponseAsDouble();
-	}
-
-	/// <summary>
-	///Executees the command and returns the result parsed as bool
-	/// </summary>
-	/// <param name="command">The command to execute </param>
-	public bool ExecuteBool(string command) {
-			SendCommand(command);
-	    if (!Connected()) {
-		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
-	    }
-	    return GetResponseAsBool();
-	}
-
-
-	/// <summary>
 	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
 	/// </summary>
 	/// <param name="command">The command to send to BCI2000 </param>
