@@ -25,6 +25,8 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 
+using static BCI2000.NetworkExtensions;
+
 #nullable enable
 
 namespace BCI2000RemoteNET {
@@ -139,9 +141,7 @@ namespace BCI2000RemoteNET {
 	    }
 	    try {
 		System.Diagnostics.Process.Start(operatorPath, arguments.ToString());
-#if DEBUG
-		Console.WriteLine($"Started operator path {operatorPath} at {address}:{port}");
-#endif
+		LogDebug($"Started operator path {operatorPath} at {address}:{port}");
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Could not start operator at path {operatorPath}: {ex.ToString()}");
 	    }
@@ -196,6 +196,7 @@ namespace BCI2000RemoteNET {
 	    Execute("Quit", expectEmptyResponse: false);
 	}
 
+	/**
 	/// <summary>
 	///Executes the given command and returns the result as type <typeparamref name="T"/>. Throws if the response cannot be parsed as <typeparamref name="T"/>. If you are trying to execute a command which does not produce output, use <see cref="Execute(string, bool)"/>.
 	/// </summary>
@@ -206,8 +207,59 @@ namespace BCI2000RemoteNET {
 	    if (!Connected()) {
 		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
 	    }
-	    return GetResponseAs<T>();
+	    return ReceiveResponse();
 	}
+	*/
+
+	/// <summary>
+	/// Executes the given command and directly returns the result.
+	/// </summary>
+	/// <param name="command"> The command to execute </param>
+	public string ExecuteString(string command) {
+	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return ReceiveResponse();
+	}
+
+
+	///<summary>
+	///Executees the command and returns the result parsed as UInt32
+	///</summary>
+	///<param name="command">The command to execute</param>
+	public UInt32 ExecuteUInt32(string command) {
+	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsUInt();
+	}
+
+	///<summary>
+	///Executees the command and returns the result parsed as double
+	///</summary>
+	///<param name="command">The command to execute</param>
+	public double ExecuteDouble(string command) {
+	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsDouble();
+	}
+
+	///<summary>
+	///Executees the command and returns the result parsed as bool
+	///</summary>
+	///<param name="command">The command to execute</param>
+	public bool ExecuteBool(string command) {
+	    SendCommand(command);
+	    if (!Connected()) {
+		throw new BCI2000ConnectionException("No connection to BCI2000 Operator");
+	    }
+	    return GetResponseAsBool();
+	}
+
 
 	/// <summary>
 	///Executes the given command. Will throw if a non-blank response is received from BCI2000 and <paramref name="expectEmptyResponse"/> is not set to false. 
@@ -228,41 +280,52 @@ namespace BCI2000RemoteNET {
 
 	//Sends command to BCI2000
 	private void SendCommand(string command){
-#if (DEBUG)
-			Console.WriteLine("send: " + command);
-#endif
-			try {
+	    LogDebug("send: " + command);
+	    try {
 		op_stream!.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
 	    }
 	}
 
-	//Gets the response from the operator and attempts to parse into the given type
-	private T GetResponseAs<T>() {
-	    string response = ReceiveResponse();
-		
-		if (typeof(T) == typeof(string)) {
-			return (T)(object)response;
-		}
-
+    //Gets response and parses to UInt32
+	private UInt32 GetResponseAsUInt() {
+	    string resp = ReceiveResponse();
 	    try {
-		MethodInfo parseMethod = typeof(T).GetMethod("Parse", new Type[] {typeof(string)});
-		if (parseMethod is not null) {
-			return (T)parseMethod.Invoke(null, new object[] {response});
-		}
+		UInt32 result = UInt32.Parse(resp, null);
+		return result;
 	    } catch (Exception ex) {
-		throw new BCI2000CommandException($"Failed to parse response {response} as type {nameof(T)}, {ex}");
+		throw new BCI2000CommandException($"Could not parse response \"{resp}\" as type UInt32, {ex}");
 	    }
-
-		throw new BCI2000CommandException($"Response parsing unsupported for type {nameof(T)}");
 	}
+
+	//Gets response and parses to UInt32
+	private double GetResponseAsDouble() {
+	    string resp = ReceiveResponse();
+	    try {
+		double result = double.Parse(resp, null);
+		return result;
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response \"{resp}\" as type Double, {ex}");
+	    }
+	}
+	//Gets response and parses to bool
+	private bool GetResponseAsBool() {
+	    string resp = ReceiveResponse();
+	    try {
+		bool result = Boolean.Parse(resp);
+		return result;
+	    } catch (Exception ex) {
+		throw new BCI2000CommandException($"Could not parse response \"{resp}\" as type bool, {ex}");
+	    }
+	}
+
 
 	//Receives response from operator and throws if response is not blank. Used with commands which expect no response, such as setting events and parameters.
 	private void ExpectEmptyResponse() { 
 	    string resp = ReceiveResponse();
 	    if (!IsEmptyOrPrompt(resp)) {
-		throw new BCI2000CommandException($"Expected empty response but received {resp} instead");
+		throw new BCI2000CommandException($"Expected empty response but received \"{resp}\" instead");
 	    }
 	}
 
@@ -276,81 +339,69 @@ namespace BCI2000RemoteNET {
 	//Receives response from the operator. Blocks until the prompt character ('>') is received.
 	private string ReceiveResponse() {
 	    StringBuilder response = new StringBuilder();
-			bool receiving = true;
-			long startTime = GetSystemTime();
-			while (receiving)
-			{
-				if (!Connected()) {
-					throw new BCI2000ConnectionException(
-						"Lost connection while receiving response"
-					);
-				}
+	    bool receiving = true;
+	    long startTime = GetSystemTime();
+	    while (receiving) {
+		if (!Connected()) {
+		    throw new BCI2000ConnectionException("Lost connection while receiving response");
+		}
 
-				long elapsedTime = GetSystemTime() - startTime;
-				if (Timeout > 0 && elapsedTime > Timeout)
-				{
-					throw new TimeoutException();
-				}
+		long elapsedTime = GetSystemTime() - startTime;
+		if (Timeout > 0 && elapsedTime > Timeout) {
+		    throw new TimeoutException();
+		}
 
-				if (!op_stream!.DataAvailable)
-				{
-					continue;
-				}
-				int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
-				if (read > 0)
-				{
-					string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
-#if (DEBUG)
-					Console.WriteLine("fr: " + resp_fragment);
-#endif
-					if (EndsWithPrompt(resp_fragment))
-					{
-						response.Append(resp_fragment.AsSpan(0, resp_fragment.LastIndexOf('>'))); //Don't include prompt in response
-						receiving = false;
-						break;
-					} else
-					{
-                        response.Append(resp_fragment);
-					} 
-				}
-			}
-#if (DEBUG)
-			Console.WriteLine("recv: " + response.ToString());
-#endif
-			return response.ToString();
+		if (!op_stream!.DataAvailable) {
+		    continue;
+		}
+		int read = op_stream.Read(recv_buffer, 0, recv_buffer.Length);
+		if (read > 0) {
+		    string resp_fragment = System.Text.Encoding.ASCII.GetString(recv_buffer, 0, read);
+		    LogDebug("fr: " + resp_fragment);
+		    if (EndsWithPrompt(resp_fragment)) {
+			response.Append(resp_fragment.AsSpan(0, resp_fragment.LastIndexOf('>'))); //Don't include prompt in response
+			receiving = false;
+			break;
+		    } else {
+			response.Append(resp_fragment);
+		    } 
+		}
+	    }
+	    LogDebug("recv: " + response.ToString());
+	    return response.ToString();
 	}
 
-        private bool EndsWithPrompt(string line)
-        {
+        private bool EndsWithPrompt(string line) {
             string lineTrim = line.ToString().Trim();
             if (lineTrim.Length == 0) return false;
             return lineTrim.Substring(lineTrim.Length - 1).Equals(Prompt);
         }
 
-		//Checks if string consists of only whitespace characters or Prompt
-		private bool IsEmptyOrPrompt(string s)
-		{
-			if (s == null)
-			{
-				return true;
-			}
-			foreach (char c in s)
-			{
-                if (c <= 0x20 || c == '>')
-                {
-                    //Do nothing if char is <= x20 (which means it is whitespace) or is prompt.
-                } else
-				{
-					return false;
-				}
-            }
-			return true;
+	//Checks if string consists of only whitespace characters or Prompt
+	private bool IsEmptyOrPrompt(string s) {
+	    if (s == null)	{
+		return true;
+	    }
+	    foreach (char c in s) {
+		if (c <= 0x20 || c == '>') {
+		    //Do nothing if char is <= x20 (which means it is whitespace) or is prompt.
+		} else {
+		    return false;
 		}
+	    }
+	    return true;
+	}
 
 	private long GetSystemTime()
 	{
 		return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 	}	
+
+	private void LogDebug(string msg) {
+#if (DEBUG)
+	    Console.WriteLine(msg);
+#endif
+	}
 
 	private TcpClient? connection;
 	private NetworkStream? op_stream;
@@ -360,5 +411,6 @@ namespace BCI2000RemoteNET {
         private const string ExitCodeTag = "\\ExitCode";
         private const string TerminationTag = "\\Terminating";
         private const string Prompt = ">";
+
     }
 }

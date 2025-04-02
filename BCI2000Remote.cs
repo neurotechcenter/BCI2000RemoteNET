@@ -74,7 +74,7 @@ namespace BCI2000RemoteNET {
 		connection.Execute($"start executable {mod_name} {args_str ?? " --local"}");
 	    }
 
-	    WaitForSystemState(new[] {SystemState.Connected, SystemState.Initialization});
+	    WaitForSystemState(new BCI2000Remote.SystemState[] {SystemState.Connected, SystemState.Initialization});
 	    remoteState = RemoteState.Connected;
 	}
 
@@ -120,41 +120,58 @@ namespace BCI2000RemoteNET {
 	}
 
 	/// <summary>
-	///Waits for the system to be in the specified state.
-	///This will block until the system is in the specified state.
+	/// Waits for the system to be in the specified state.
+	/// This will block until the system is in the specified state.
 	/// </summary>
-	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	/// <param name="state"> The state to wait for </param>
+	/// <param name="timeout">The timeout value (in seconds) that BCI2000 will wait in until it returns false. Not to be confused with BCI2000Connection.Timeout, which is the time a command will wait for a response from BCI2000 before throwing an exception. The connection timeout is overridden, so this command may block indefinitely if no value is given for this parameter.</param>
 	/// <returns>True if the system state was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState state, double? timeout = null) {
-#if (DEBUG)
-	    Console.WriteLine($"Wait for {state}");
-#endif
-	    if (timeout != null) {
-		return connection.Execute<bool>($"wait for {state} {timeout?.ToString() ?? ""}");
-	    } else {
-		connection.Execute($"wait for {state} {timeout?.ToString() ?? ""}");
-		return true;
+	    LogDebug($"Wait for {state}");
+	    int load = connection.Timeout; // We override the timeout here to avoid having to redo the whole connection API.
+	    connection.Timeout = 0;
+	    bool result = false;
+	    if (timeout == null) {
+		connection.Execute($"wait for {state.ToString()}");
+		result = true;
+	    } else { 
+		string resp = connection.ExecuteString($"wait for {state.ToString()} {timeout!.ToString()}");
+		if (string.IsNullOrEmpty(resp)) {
+		    result = true;
+		} else {
+		    result = Boolean.Parse(resp);
+		}
 	    }
-
+	    connection.Timeout = load;
+	    return result;
 	}
 
 	/// <summary>
 	///Waits for the system to be in one of the specified states.
 	///This will block until the system is in the specified state.
 	/// </summary>
-	/// <param name="timeout">The timeout value (in seconds) that the command will wait before failing. Leave as null to wait indefinitely.</param>
+	/// <param name="state"> The states to wait for </param>
+	/// <param name="timeout">The timeout value (in seconds) that BCI2000 will wait in until it returns false. Not to be confused with BCI2000Connection.Timeout, which is the time a command will wait for a response from BCI2000 before throwing an exception. The connection timeout is overridden, so this command may block indefinitely if no value is given for this parameter.</param>
 	/// <returns>True if one of the states was reached within the timeout time.</returns>
 	public bool WaitForSystemState(SystemState[] states, double? timeout = null) {
 	    string states_str = string.Join('|', states.Select(state => state.ToString()).ToArray());
-#if (DEBUG)
-	    Console.WriteLine($"Wait for {states_str}");
-#endif
-	    if (timeout != null) {
-		return connection.Execute<bool>($"wait for {states_str} {timeout?.ToString() ?? ""}");
-	    } else {
-		connection.Execute($"wait for {states_str} {timeout?.ToString() ?? ""}");
-		return true;
+	    LogDebug($"Wait for {states_str}");
+	    int load = connection.Timeout; // We override the timeout here to avoid having to redo the whole connection API.
+	    connection.Timeout = 0;
+	    bool result = false;
+	    if (timeout == null) {
+		connection.Execute($"wait for {states_str}");
+		result = true;
+	    } else { 
+		string resp = connection.ExecuteString($"wait for {states_str} {timeout!.ToString()}");
+		if (string.IsNullOrEmpty(resp)) {
+		    result = true;
+		} else {
+		    result = Boolean.Parse(resp);
+		}
 	    }
+	    connection.Timeout = load;
+	    return result;
 	}
 
 	/// <summary>
@@ -162,7 +179,7 @@ namespace BCI2000RemoteNET {
 	/// <exception cref="BCI2000CommandException">If response cannot be parsed into a valid system state</exception>
 	/// </summary>
 	public SystemState GetSystemState() {
-	    string resp = connection.Execute<string>("get system state");
+	    string resp = connection.ExecuteString("get system state");
 	    if (Enum.TryParse(resp, out SystemState r_state)) {
 		return r_state;
 	    } else {
@@ -222,7 +239,9 @@ namespace BCI2000RemoteNET {
 	/// <param name="minValue">The minimum value of the parameter. This argument is optional.</param>
 	/// <exception cref="BCI2000CommandException">Thrown if BCI2000 is in an invalid state for adding parameters</exception>
 	public void AddParameter(string section, string name, string defaultValue = "%", string minValue = "%", string maxValue = "%") {
-	    var containsWS = (new []{section, name, defaultValue, minValue, maxValue}).Where(str => str.Any(Char.IsWhiteSpace)).Select(str => $"\"{str}\""); 
+	    var containsWS = (new []{section, name, defaultValue, minValue, maxValue})
+		.Where(str => str.Any(Char.IsWhiteSpace))
+		.Select(str => $"\"{str}\""); 
 	    if (containsWS.Count() != 0) {
 		throw new BCI2000CommandException($"Parameter definition parameters must not contain whitespace. Parameter(s) {string.Join(',', containsWS)} contain whitespace.");
 	    }
@@ -264,7 +283,7 @@ namespace BCI2000RemoteNET {
 	///Gets the value of a BCI2000 parameter.
 	/// </summary>
 	public string GetParameter(string name) {
-	    return connection.Execute<string>($"Get parameter {name}");
+	    return connection.ExecuteString($"Get parameter {name}");
 	}
 
 	/// <summary>
@@ -302,7 +321,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <param name="name">The name of the state to get</param>
 	public UInt32 GetState(string name){
-	    return connection.Execute<UInt32>($"get state {name}");
+	    return connection.ExecuteUInt32($"get state {name}");
 	}
 
 	/// <summary>
@@ -350,7 +369,7 @@ namespace BCI2000RemoteNET {
 	/// <param name="channel">The channel of the signal to get</param>
 	/// <param name="element">The element of the signal to get</param>
 	public double GetSignal(int channel, int element) {
-	    return connection.Execute<double>($"get signal({channel},{element})");
+	    return connection.ExecuteDouble($"get signal({channel},{element})");
 	}
 
 	/// <summary>
@@ -359,7 +378,7 @@ namespace BCI2000RemoteNET {
 	/// <param name="name">The name of the event to get </param>
 	/// <param name="sample">The 1-indexed position in the state vector (individual event value per sample in block) </param>
 	public UInt32 GetEvent(string name, int sample){
-	    return connection.Execute<UInt32>($"get event[{sample}] {name}");
+	    return connection.ExecuteUInt32($"get event[{sample}] {name}");
 	}
 
 	/// <summary>
@@ -367,7 +386,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <param name="name">The name of the event to get </param>
 	public UInt32 GetEvent(string name){
-	    return connection.Execute<UInt32>($"get event {name}");
+	    return connection.ExecuteUInt32($"get event {name}");
 	}
 
 	/// <summary>
@@ -390,5 +409,11 @@ namespace BCI2000RemoteNET {
 	    SuspendRun
 	}
 	private RemoteState remoteState = RemoteState.Idle;
+
+	private void LogDebug(string msg) {
+#if (DEBUG)
+	    Console.WriteLine(msg);
+#endif
+	}
     }
 }
