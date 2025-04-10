@@ -175,6 +175,16 @@ namespace BCI2000RemoteNET {
 
 	    op_stream = connection.GetStream();
 
+	    connection_unchecked = new TcpClient();
+	    try {
+		connection_unchecked.Connect(addr, port);
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Could not connect to operator, second client, at {addr.ToString()}:{port}, {ex.ToString()}");
+	    }
+
+	    op_stream_unchecked = connection_unchecked.GetStream();
+
+
 	    connection.SendTimeout = Timeout;
 	    connection.ReceiveTimeout = Timeout;
 
@@ -283,11 +293,27 @@ namespace BCI2000RemoteNET {
 	    }
 	}
 
+	/// <summary>
+	/// Executes a command without waiting for a response
+	/// </summary>
+	public void ExecuteUnchecked(string command) {
+	    SendUnchecked(command);
+	}
+
 	//Sends command to BCI2000
 	private void SendCommand(string command){
 	    LogDebug("send: " + command);
 	    try {
 		op_stream!.Write(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
+	    } catch (Exception ex) {
+		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
+	    }
+	}
+
+	private void SendUnchecked(string command) {
+	    LogDebug("send unchecked: " + command);
+	    try {
+		op_stream_unchecked!.WriteAsync(System.Text.Encoding.ASCII.GetBytes(command + "\r\n"));
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
 	    }
@@ -410,6 +436,9 @@ namespace BCI2000RemoteNET {
 
 	private TcpClient? connection;
 	private NetworkStream? op_stream;
+
+	private TcpClient? connection_unchecked;
+	private NetworkStream? op_stream_unchecked;
 
         private const string ReadlineTag = "\\AwaitingInput:";
         private const string AckTag = "\\AcknowledgedInput";

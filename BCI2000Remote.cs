@@ -355,6 +355,13 @@ namespace BCI2000RemoteNET {
 	}
 
 	/// <summary>
+	/// Sets the specified event without blocking for the response.
+	/// </summary>
+	public void SetEventUnchecked(string name, UInt32 value) {
+	    connection.ExecuteUnchecked($"set event {name} {value}");
+	}
+
+	/// <summary>
 	/// Sets all given events to the given values, in one command. This avoids the additional overhead of calling these commands sequentially
 	/// </summary>
 	/// <param name="events"> List of name, value pairs. The given events will be set to the given values. </param>
@@ -373,6 +380,15 @@ namespace BCI2000RemoteNET {
 	/// <param name="value">The value of the event to pulse </param>
 	public void PulseEvent(string name, UInt32 value) {
 	    connection.Execute($"pulse event {name} {value}");
+	}
+
+	/// <summary>
+	///Sets the specified event to the specified value for a single sample duration, without waiting for confirmation from BCI2000. To set an event to a persistent value, use <see cref="SetEvent(string, uint)"/>
+	/// </summary>
+	/// <param name="name">The name of the event to pulse </param>
+	/// <param name="value">The value of the event to pulse </param>
+	public void PulseEventUnchecked(string name, UInt32 value) {
+	    connection.ExecuteUnchecked($"pulse event {name} {value}");
 	}
 
 	/// <summary>
