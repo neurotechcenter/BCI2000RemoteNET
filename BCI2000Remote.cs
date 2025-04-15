@@ -374,6 +374,18 @@ namespace BCI2000RemoteNET {
 	}
 
 	/// <summary>
+	/// Sets all given events to the given values, in one command, without waiting for a response. This avoids the additional overhead of calling these commands sequentially.
+	/// </summary>
+	/// <param name="events"> List of name, value pairs. The given events will be set to the given values. </param>
+	public void BatchSetEventUnchecked(IEnumerable<(string, UInt32)> events) {
+	    StringBuilder s = new StringBuilder();
+	    foreach ((string name, UInt32 value) in events) {
+		s.Append($"set event {name} {value};");
+	    }
+	    connection.Execute(s.ToString());
+	}
+
+	/// <summary>
 	///Sets the specified event to the specified value for a single sample duration. To set an event to a persistent value, use <see cref="SetEvent(string, uint)"/>
 	/// </summary>
 	/// <param name="name">The name of the event to pulse </param>
