@@ -11,6 +11,7 @@
     <Description>Interface for controlling BCI2000 remotely.</Description>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <RepositoryUrl>https://github.com/neurotechcenter/BCI2000RemoteNET</RepositoryUrl>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageIcon>prompt256.png</PackageIcon>
     <PackageIconUrl />
     <RepositoryType>Git</RepositoryType>

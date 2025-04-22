@@ -22,7 +22,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 
@@ -88,6 +88,26 @@ namespace BCI2000RemoteNET {
 	}
 
 
+	private bool afterConnect = false;
+	private bool synchronized;
+	public bool Synchronized { 
+	    get {
+		return synchronized;
+	    }
+	    set {
+		if (afterConnect) {
+		    throw new BCI2000CommandException("Cannot set Synchronized option after connection");
+		} else {
+		    synchronized = value;
+		}
+	    }
+	}
+
+	public int SyncAttempts { get; set; } = 10;
+
+	public int SyncPort { get; set; } = 3997;
+
+
 	~BCI2000Connection() {
 	    Disconnect();
 	}
@@ -140,12 +160,17 @@ namespace BCI2000RemoteNET {
 	    if (HideWindow) {
 		arguments.Append(" --Hide ");
 	    }
+	    if (Synchronized) {
+		arguments.Append($" --timesync \"{addr.ToString()}:{SyncPort}\" ");
+	    }
 	    try {
 		System.Diagnostics.Process.Start(operatorPath, arguments.ToString());
 		LogDebug($"Started operator path {operatorPath} at {address}:{port}");
 	    } catch (Exception ex) {
 		throw new BCI2000ConnectionException($"Could not start operator at path {operatorPath}: {ex.ToString()}");
 	    }
+	    afterConnect = true;
+	    sysTimer.Start();
 	    Thread.Sleep(delay);
 	}
 
@@ -154,6 +179,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <param name="address">The IPv4 address to connect to. Note that this may not necessarily be the same as the one used in <see cref="StartOperator">StartOperator </see>, even if running BCI2000 locally. For example, if the operator was started on the local machine with address <c>0.0.0.0 </c>, you would connect to it at address <c>127.0.0.1 </c> </param>
 	/// <param name="port">The port on which BCI2000 is listening. If BCI2000 was started locally with <see cref="StartOperator">StartOperator </see>, this must be the same value. </param>
+	/// <param name="syncTime"> Attempt to establish a time basis with BCI2000, enabling timestamped events </param>
 	public void Connect(string address = "127.0.0.1", int port = 3999) {
 	    if (port < 0 || port > 65535) {
 		throw new BCI2000ConnectionException($"Port number {port} is not valid");
@@ -184,6 +210,12 @@ namespace BCI2000RemoteNET {
 
 	    op_stream_unchecked = connection_unchecked.GetStream();
 
+	    sync_connection = new UdpClient();
+	    sync_connection.Connect(addr, SyncPort);
+
+	    if (Synchronized) {
+		offset = Synchronization.Synchronize(sync_connection, sysTimer, Timeout, SyncAttempts);
+	    }
 
 	    connection.SendTimeout = Timeout;
 	    connection.ReceiveTimeout = Timeout;
@@ -428,6 +460,7 @@ namespace BCI2000RemoteNET {
 		return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 	}	
 
+
 	private void LogDebug(string msg) {
 #if (DEBUG)
 	    Console.WriteLine(msg);
@@ -439,6 +472,12 @@ namespace BCI2000RemoteNET {
 
 	private TcpClient? connection_unchecked;
 	private NetworkStream? op_stream_unchecked;
+
+	private UdpClient? sync_connection;
+
+	private long offset;
+
+	private Stopwatch sysTimer = new Stopwatch();
 
         private const string ReadlineTag = "\\AwaitingInput:";
         private const string AckTag = "\\AcknowledgedInput";
