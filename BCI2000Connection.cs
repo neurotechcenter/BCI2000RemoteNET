@@ -26,7 +26,6 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 
-using static BCI2000.NetworkExtensions;
 
 #nullable enable
 
@@ -229,7 +228,7 @@ namespace BCI2000RemoteNET {
 	/// </summary>
 	/// <returns>Whether or not this object is currently connected to BCI2000 </returns>
 	public bool Connected() {
-	    return connection?.IsConnected() ?? false;
+	    return connection?.Connected ?? false;
 	}
 
 	/// <summary>
