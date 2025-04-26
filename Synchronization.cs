@@ -29,22 +29,27 @@ class Synchronization {
 	}
 
 
-	public static long Synchronize(UdpClient conn, Stopwatch timer, int timeout, int attempts) {
+	///
+	/// Executes the synchronize operation some amount of times, and chooses the best measured offset by 
+	/// which attempt had the least difference between inbound and outbound latency.
+	/// Returns the determined offset, as well as inbound and outbound latencies.
+	/// The offset is the value o = s - m, where s is the measured time at this client and m is the measured time at the operator server.
+	///
+	public static (long offset, long recv_latency, long send_latency) Synchronize(UdpClient conn, Stopwatch timer, int timeout, int attempts) {
 		var syncs = new (long, long, long)[attempts];
 		for (int i = 0; i < attempts; i++) {
 			syncs[i] = SyncOnce(conn, timer, timeout);
 		}
 
 		//Get offset with smallest delta between the two latencies.
-		long offset = syncs
-			.Select<(long offset, long lat1, long lat2), (long, long)>(
-					(t) => (t.offset, Math.Abs(t.lat1 - t.lat2))
+		(long offset, long delta_lat, long recv_lat, long send_lat) data = syncs
+			.Select<(long offset, long lat1, long lat2), (long, long, long, long)>(
+					(t) => (t.offset, Math.Abs(t.lat1 - t.lat2), t.lat1, t.lat2)
 					)
-			.Aggregate<(long offset, long d_lat)>((t, t2) => t2.d_lat < t.d_lat ? t2 : t)
-			.offset;
+			.Aggregate<(long offset, long d_lat, long recv_lat, long send_lat)>((t, t2) => t2.d_lat < t.d_lat ? t2 : t);
 
 
-		return offset;
+		return (data.offset, data.recv_lat, data.send_lat);
 	}
 
 	///
@@ -137,8 +142,8 @@ class Synchronization {
 
 
 	private static long TimeSpanToNanos(TimeSpan span) {
-		long nanos = (span.Ticks * 100);
-		return nanos;
+		long nanosecondspertick = 1000000000/Stopwatch.Frequency;
+		return span.Ticks * nanosecondspertick;
 	}
 
 

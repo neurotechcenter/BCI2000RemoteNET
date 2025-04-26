@@ -213,7 +213,7 @@ namespace BCI2000RemoteNET {
 	    sync_connection.Connect(addr, SyncPort);
 
 	    if (Synchronized) {
-		offset = Synchronization.Synchronize(sync_connection, sysTimer, Timeout, SyncAttempts);
+		offset = Synchronization.Synchronize(sync_connection, sysTimer, Timeout, SyncAttempts).offset;
 	    }
 
 	    connection.SendTimeout = Timeout;
@@ -331,6 +331,14 @@ namespace BCI2000RemoteNET {
 	    SendUnchecked(command);
 	}
 
+	/// <summary>
+	/// Gets nanoseconds since the operator started, as determined by the offset calculated by Synchronize.
+	/// </summary>
+	internal long GetOperatorCanonicalTime() {
+	    long nanosecondspertick = 1000000000 / Stopwatch.Frequency;
+	    return (sysTimer.ElapsedTicks * nanosecondspertick) - offset;
+	}
+
 	//Sends command to BCI2000
 	private void SendCommand(string command){
 	    LogDebug("send: " + command);
@@ -349,6 +357,7 @@ namespace BCI2000RemoteNET {
 		throw new BCI2000ConnectionException($"Failed to send command to operator, {ex}");
 	    }
 	}
+
 
     //Gets response and parses to UInt32
 	private UInt32 GetResponseAsUInt() {

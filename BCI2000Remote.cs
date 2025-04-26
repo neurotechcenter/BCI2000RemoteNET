@@ -355,6 +355,24 @@ namespace BCI2000RemoteNET {
 	}
 
 	/// <summary>
+	///Sets the specified event to the specified value. To set an event for a single sample duration, use <see cref="PulseEvent(string, uint)"/>
+	/// Also sends an operator timestamp for synchronization.
+	/// </summary>
+	/// <param name="name">The name of the event to set </param>
+	/// <param name="value">The value of the event to set </param>
+	public void SetEventTimestamped(string name, UInt32 value, bool execute_unchecked = false) {
+	    if (!connection.Synchronized) {
+		throw new BCI2000CommandException("Connection has not been configured to store time stamps. Set the Synchronize property before calling StartOperator or Connect");
+	    }
+	    long operator_time = connection.GetOperatorCanonicalTime();
+	    if (execute_unchecked) {
+		connection.ExecuteUnchecked($"settimestamped event {name} {value} {operator_time}");
+	    } else {
+		connection.Execute($"settimestamped event {name} {value} {operator_time}");
+	    }
+	}
+
+	/// <summary>
 	/// Sets the specified event without blocking for the response.
 	/// </summary>
 	public void SetEventUnchecked(string name, UInt32 value) {
@@ -392,6 +410,24 @@ namespace BCI2000RemoteNET {
 	/// <param name="value">The value of the event to pulse </param>
 	public void PulseEvent(string name, UInt32 value) {
 	    connection.Execute($"pulse event {name} {value}");
+	}
+
+	/// <summary>
+	/// Sets the specified event to the specified value for a single sample duration. 
+	/// Also sends a timestamp for later synchronization.
+	/// </summary>
+	/// <param name="name">The name of the event to set </param>
+	/// <param name="value">The value of the event to set </param>
+	public void PulseEventTimestamped(string name, UInt32 value, bool execute_unchecked = false) {
+	    if (!connection.Synchronized) {
+		throw new BCI2000CommandException("Connection has not been configured to store time stamps. Set the Synchronize property before calling StartOperator or Connect");
+	    }
+	    long operator_time = connection.GetOperatorCanonicalTime();
+	    if (execute_unchecked) { 
+		connection.ExecuteUnchecked($"pulsetimestamped event {name} {value} {operator_time}");
+	    } else {
+		connection.Execute($"pulsetimestamped event {name} {value} {operator_time}");
+	    }
 	}
 
 	/// <summary>
