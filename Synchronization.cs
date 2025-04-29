@@ -74,7 +74,7 @@ class Synchronization {
 		BufCpy(curPort, reqMsg, 5, 2);
 		
 
-		long t_send = TimeSpanToNanos(timer.Elapsed);
+		long t_send = TicksToNanos(timer.ElapsedTicks);
 		conn.Send(reqMsg, 7);
 
 		var respTask = listener.ReceiveAsync();
@@ -84,7 +84,7 @@ class Synchronization {
 		}
 
 		byte[] resp = respTask.Result.Buffer;
-		long t_recv = TimeSpanToNanos(timer.Elapsed);
+		long t_recv = TicksToNanos(timer.ElapsedTicks);
 		if (resp.Length != 4 + 1 + 8 + 8) {
 			throw new BCI2000ConnectionException($"Expected response of length {4+1+8+8} but received response of length {resp.Length}");
 		}
@@ -141,9 +141,9 @@ class Synchronization {
 	}
 
 
-	private static long TimeSpanToNanos(TimeSpan span) {
+	private static long TicksToNanos(long ticks) {
 		long nanosecondspertick = 1000000000/Stopwatch.Frequency;
-		return span.Ticks * nanosecondspertick;
+		return ticks * nanosecondspertick;
 	}
 
 
