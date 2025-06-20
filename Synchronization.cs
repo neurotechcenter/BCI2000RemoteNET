@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Linq;
+using System.Threading;
 
 
 namespace BCI2000RemoteNET {
@@ -18,9 +19,6 @@ class Synchronization {
 
 	private const uint sync_magic = 0xbc12bc12;
 	private static byte[] sync_magic_bytes = HostToNetF(BitConverter.GetBytes(sync_magic));
-
-	public static UInt16 ListenPort = 12122;
-	private static UdpClient listener = new UdpClient(ListenPort);
 
 
 	enum MessageType : byte {
@@ -39,6 +37,7 @@ class Synchronization {
 		var syncs = new (long, long, long)[attempts];
 		for (int i = 0; i < attempts; i++) {
 			syncs[i] = SyncOnce(conn, timer, timeout);
+			Thread.Sleep(100);
 		}
 
 		//Get offset with smallest delta between the two latencies.
@@ -66,18 +65,15 @@ class Synchronization {
 
 
 	private static (long, long, long, long) ReqResp(UdpClient conn, int timeout, Stopwatch timer) {
-		byte[] reqMsg = new byte[4 + 1 + 2];	
+		byte[] reqMsg = new byte[4 + 1];	
 		BufCpy(sync_magic_bytes, reqMsg, 0, 4);
 		reqMsg[4] = (byte)MessageType.Req;
-		byte[] curPort = BitConverter.GetBytes(ListenPort);
-		HostToNet(curPort);
-		BufCpy(curPort, reqMsg, 5, 2);
 		
 
 		long t_send = TicksToNanos(timer.ElapsedTicks);
-		conn.Send(reqMsg, 7);
+		conn.Send(reqMsg, 5);
 
-		var respTask = listener.ReceiveAsync();
+		var respTask = conn.ReceiveAsync();
 
 		if (!respTask.Wait(timeout)) {
 			throw new BCI2000ConnectionException("Timed out waiting for BCI2000 time server");
