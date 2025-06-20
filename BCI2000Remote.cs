@@ -384,13 +384,14 @@ namespace BCI2000RemoteNET {
 	/// Visualizes a BCI2000 value, for example, an event.
 	/// </summary>
 	/// <param name="value">The expression to visualize. For example, if you wish to visualize an event called `event` pass in the value `"event"`</param>
-	public void Visualize(string value)
+	public void Visualize(string value, int? decimate = null)
 		{
 			if (remoteState == RemoteState.Idle)
 			{
 				throw new BCI2000CommandException("Cannot visualize value during before initialization. Call this method after StartupModules()");
 			}
-			connection.Execute($"visualize watch {value}");
+			string decimstr = decimate != null ? $"decimate {decimate}" : "";
+			connection.Execute($"visualize watch {decimstr} {value}");
 		}
 	
 	//Subset of system states relevant to this class. Used to make sure that certain commands are valid.
